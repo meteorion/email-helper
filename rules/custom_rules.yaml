@@ -1,0 +1,31 @@
+rules:
+  - name: "CEO邮件优先"
+    enabled: true
+    priority: 100
+    condition:
+      sender: "ceo@company.com"
+    action:
+      set_type: "审批类"
+      set_priority: "紧急"
+      override_ai: true
+      auto_tag: ["VIP", "领导"]
+
+  - name: "监控告警识别"
+    enabled: true
+    priority: 90
+    condition:
+      subject_contains: ["告警", "ALERT", "CRITICAL"]
+      sender_domain: ["monitor.system"]
+    action:
+      set_type: "告警类"
+      set_priority: "紧急"
+      override_ai: true
+
+  - name: "审批关键词"
+    enabled: true
+    priority: 50
+    condition:
+      subject_contains: ["审批", "请批", "申请"]
+    action:
+      set_type: "审批类"
+      override_ai: false

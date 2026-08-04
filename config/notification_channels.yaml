@@ -1,0 +1,32 @@
+channels:
+  wecom_default:
+    type: wecom
+    webhook_ref: "secrets.webhooks.wecom_default"
+
+routing:
+  by_category:
+    告警类: [wecom_default]
+    审批类: [wecom_default]
+  by_priority:
+    紧急: [wecom_default]
+  default: [wecom_default]
+
+dnd:
+  enabled: true
+  start: "22:00"
+  end: "08:00"
+  bypass_for_urgent: true
+
+rate_limit:
+  capacity: 20
+  refill_interval_ms: 3000
+
+retry:
+  max_retries: 3
+  base_delay: 5.0
+  backoff_multiplier: 3.0
+
+aggregation:
+  enabled: true
+  window_minutes: 5
+  min_items: 2

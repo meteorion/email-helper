@@ -1,0 +1,9 @@
+name: "approval_urgent"
+type: "markdown"
+content: |
+  ## 🚨 紧急审批通知
+  **标题**: {{title}}
+  **金额**: {{amount}}
+  **申请人**: {{applicant}}
+  金额超过阈值，请立即审批！
+mentioned: ["@all"]

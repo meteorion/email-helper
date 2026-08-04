@@ -14,6 +14,7 @@ class Attachment:
     mime_type: str
     content_id: Optional[str] = None  # 内联附件的 CID
     local_path: Optional[str] = None  # 本地存储路径
+    blocked: bool = False  # 危险扩展名拦截标记
 
     def to_dict(self) -> dict:
         return {
@@ -22,6 +23,7 @@ class Attachment:
             "mime_type": self.mime_type,
             "content_id": self.content_id,
             "local_path": self.local_path,
+            "blocked": self.blocked,
         }
 
     @classmethod
@@ -32,6 +34,7 @@ class Attachment:
             mime_type=data["mime_type"],
             content_id=data.get("content_id"),
             local_path=data.get("local_path"),
+            blocked=data.get("blocked", False),
         )
 
 
@@ -51,6 +54,18 @@ class MailData:
     is_read: bool = False
     is_sent: bool = False
     local_file_path: Optional[str] = None
+    # Alpha 新增字段
+    in_reply_to: Optional[str] = None
+    references: Optional[str] = None
+    content_fingerprint: Optional[str] = None
+    thread_id: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[str] = None
+    confidence: float = 0.0
+    need_reply: bool = False
+    tags: list[str] = field(default_factory=list)
+    classify_source: Optional[str] = None  # rule/llm/cache/manual
+    status: str = "new"  # new/pending_manual/processing/processed/archived
 
     def to_dict(self) -> dict:
         return {
@@ -67,6 +82,17 @@ class MailData:
             "is_read": self.is_read,
             "is_sent": self.is_sent,
             "local_file_path": self.local_file_path,
+            "in_reply_to": self.in_reply_to,
+            "references": self.references,
+            "content_fingerprint": self.content_fingerprint,
+            "thread_id": self.thread_id,
+            "category": self.category,
+            "priority": self.priority,
+            "confidence": self.confidence,
+            "need_reply": self.need_reply,
+            "tags": self.tags,
+            "classify_source": self.classify_source,
+            "status": self.status,
         }
 
     @classmethod
@@ -85,6 +111,17 @@ class MailData:
             is_read=data.get("is_read", False),
             is_sent=data.get("is_sent", False),
             local_file_path=data.get("local_file_path"),
+            in_reply_to=data.get("in_reply_to"),
+            references=data.get("references"),
+            content_fingerprint=data.get("content_fingerprint"),
+            thread_id=data.get("thread_id"),
+            category=data.get("category"),
+            priority=data.get("priority"),
+            confidence=data.get("confidence", 0.0),
+            need_reply=data.get("need_reply", False),
+            tags=data.get("tags", []),
+            classify_source=data.get("classify_source"),
+            status=data.get("status", "new"),
         )
 
     def to_json(self, indent: int = 2) -> str:

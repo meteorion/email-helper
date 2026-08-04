@@ -1,0 +1,59 @@
+version: "1.0"
+name: "审批邮件处理流程"
+enabled: true
+description: "审批类邮件 → 提取金额 → 分支判断 → 群通知"
+
+trigger:
+  mail_type: "审批类"
+  priority: 50
+  match_mode: "all"
+
+variables:
+  large_amount_threshold: 100000
+
+steps:
+  - id: "extract"
+    type: "action"
+    action: "extract_info"
+    params:
+      fields: ["审批金额", "审批标题", "申请人"]
+    output: "extracted_info"
+    on_error: "skip"
+
+  - id: "check_amount"
+    type: "condition"
+    if: "${extracted_info.审批金额} > ${variables.large_amount_threshold}"
+    then: "notify_urgent"
+    else: "notify_normal"
+
+  - id: "notify_urgent"
+    type: "action"
+    action: "notify"
+    params:
+      template_name: "approval_urgent"
+      context:
+        amount: "${extracted_info.审批金额}"
+        title: "${extracted_info.审批标题}"
+      mention: ["@all"]
+    on_error: "retry_then_skip"
+
+  - id: "notify_normal"
+    type: "action"
+    action: "notify"
+    params:
+      template_name: "approval_normal"
+      context:
+        amount: "${extracted_info.审批金额}"
+        title: "${extracted_info.审批标题}"
+    on_error: "retry_then_skip"
+
+  - id: "save_record"
+    type: "action"
+    action: "save_record"
+    params:
+      record_type: "approval"
+      data:
+        amount: "${extracted_info.审批金额}"
+        title: "${extracted_info.审批标题}"
+        applicant: "${extracted_info.申请人}"
+    on_error: "skip"

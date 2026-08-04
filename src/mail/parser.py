@@ -19,6 +19,23 @@ logger = get_logger("mail.parser")
 # 字符集回退顺序
 CHARSET_FALLBACK = ["utf-8", "gbk", "gb2312", "gb18030", "latin1"]
 
+# chardet 可选依赖（用于字符集自动检测）
+try:
+    import chardet  # type: ignore
+    _CHARDET_AVAILABLE: bool = True
+except ImportError:  # pragma: no cover - chardet 是可选依赖
+    chardet = None  # type: ignore
+    _CHARDET_AVAILABLE = False
+
+# chardet 检测置信度阈值
+_CHARDET_CONFIDENCE_THRESHOLD: float = 0.8
+
+# 危险附件扩展名（命中即标记 blocked=True，不下载）
+DANGEROUS_EXTENSIONS: tuple[str, ...] = (
+    ".exe", ".bat", ".cmd", ".ps1", ".vbs",
+    ".js", ".jar", ".scr", ".com", ".pif",
+)
+
 
 def decode_header_value(value: str) -> str:
     """
@@ -80,24 +97,49 @@ def get_sender_domain(email_addr: str) -> str:
 
 
 def decode_payload(part: Message) -> str:
-    """解码邮件 part 的 payload"""
+    """解码邮件 part 的 payload
+
+    字符集回退链：声明 charset → chardet 自动检测 → CHARSET_FALLBACK → utf-8 replace。
+    chardet 不可用时跳过自动检测步骤。
+    """
     payload = part.get_payload(decode=True)
     if payload is None:
         return ""
 
     charset = part.get_content_charset()
+    # 1. 优先尝试声明的 charset
     if charset:
-        charsets_to_try = [charset] + [c for c in CHARSET_FALLBACK if c != charset]
+        try:
+            return payload.decode(charset)
+        except (UnicodeDecodeError, LookupError):
+            pass
+
+    # 2. chardet 自动检测（如果可用）
+    if _CHARDET_AVAILABLE and chardet is not None:
+        try:
+            detected = chardet.detect(payload)
+            encoding = detected.get("encoding") if detected else None
+            confidence = detected.get("confidence", 0.0) if detected else 0.0
+            if encoding and confidence >= _CHARDET_CONFIDENCE_THRESHOLD:
+                try:
+                    return payload.decode(encoding)
+                except (UnicodeDecodeError, LookupError):
+                    pass
+        except Exception as e:
+            logger.debug(f"chardet 检测失败: {e}")
+
+    # 3. CHARSET_FALLBACK 回退链
+    if charset:
+        charsets_to_try = [c for c in CHARSET_FALLBACK if c != charset]
     else:
         charsets_to_try = CHARSET_FALLBACK
-
     for enc in charsets_to_try:
         try:
             return payload.decode(enc)
         except (UnicodeDecodeError, LookupError):
             continue
 
-    # 最终回退
+    # 4. 最终回退
     return payload.decode("utf-8", errors="replace")
 
 
@@ -153,7 +195,11 @@ def html_to_text(html: str) -> str:
 
 
 def extract_attachments(msg: Message) -> list[Attachment]:
-    """提取邮件附件"""
+    """提取邮件附件
+
+    危险扩展名（DANGEROUS_EXTENSIONS）会被标记 ``blocked=True``，
+    后续下载逻辑据此跳过下载。
+    """
     attachments = []
 
     if not msg.is_multipart():
@@ -183,14 +229,36 @@ def extract_attachments(msg: Message) -> list[Attachment]:
             if content_id:
                 content_id = content_id.strip("<>")
 
+            # 危险扩展名拦截
+            blocked = is_dangerous_attachment(filename)
+            if blocked:
+                logger.warning(f"拦截危险附件: {filename}")
+
             attachments.append(Attachment(
                 filename=filename,
                 size=size,
                 mime_type=mime_type,
                 content_id=content_id,
+                blocked=blocked,
             ))
 
     return attachments
+
+
+def is_dangerous_attachment(filename: str) -> bool:
+    """判断附件是否属于危险扩展名。
+
+    Args:
+        filename: 附件文件名。
+
+    Returns:
+        命中危险扩展名返回 True，否则 False。
+    """
+    if not filename:
+        return False
+    # 取小写后缀比较，过滤空扩展名
+    lower_name = filename.lower()
+    return any(lower_name.endswith(ext) for ext in DANGEROUS_EXTENSIONS)
 
 
 def parse_date(date_str: str) -> datetime:
@@ -208,6 +276,51 @@ def parse_date(date_str: str) -> datetime:
     except Exception as e:
         logger.warning(f"解析日期失败: {date_str}, 错误: {e}")
         return datetime.now(timezone.utc)
+
+
+def compute_content_fingerprint(subject: str, body_text: str) -> str:
+    """计算邮件内容指纹。
+
+    指纹 = MD5(subject + body_text 前 500 字)，用于内容级去重。
+
+    Args:
+        subject: 邮件主题。
+        body_text: 邮件纯文本正文。
+
+    Returns:
+        32 位十六进制 MD5 字符串。
+    """
+    raw = f"{subject}{body_text[:500]}"
+    return hashlib.md5(raw.encode("utf-8", errors="replace")).hexdigest()
+
+
+def extract_thread_id(
+    in_reply_to: Optional[str],
+    references: Optional[str],
+) -> Optional[str]:
+    """从 In-Reply-To / References 头提取线程 ID。
+
+    优先取 In-Reply-To（去掉空白和尖括号），其次取 References 列表的第一个 ID。
+    都没有则返回 None（由调用方决定是否回退到 message_id 作为新线程起点）。
+
+    Args:
+        in_reply_to: In-Reply-To 头值。
+        references: References 头值（空格分隔的多个 message_id）。
+
+    Returns:
+        线程 ID 字符串，无法提取时返回 None。
+    """
+    if in_reply_to:
+        candidate = in_reply_to.strip().strip("<>").strip()
+        if candidate:
+            return candidate
+    if references:
+        # References 头是空格分隔的多个 <message-id>
+        for ref in references.split():
+            candidate = ref.strip().strip("<>").strip()
+            if candidate:
+                return candidate
+    return None
 
 
 def parse_email(raw_bytes: bytes) -> MailData:
@@ -253,6 +366,18 @@ def parse_email(raw_bytes: bytes) -> MailData:
         # 附件
         attachments = extract_attachments(msg)
 
+        # In-Reply-To / References 头提取
+        in_reply_to_raw = msg.get("In-Reply-To", "")
+        references_raw = msg.get("References", "")
+        in_reply_to = in_reply_to_raw.strip() if in_reply_to_raw else None
+        references = references_raw.strip() if references_raw else None
+
+        # content_fingerprint 计算（subject + body_text 前 500 字 MD5）
+        content_fingerprint = compute_content_fingerprint(subject, body_text)
+
+        # thread_id 计算（从 in_reply_to 或 references 提取）
+        thread_id = extract_thread_id(in_reply_to, references)
+
         return MailData(
             message_id=message_id,
             sender=sender,
@@ -264,6 +389,10 @@ def parse_email(raw_bytes: bytes) -> MailData:
             body_text=body_text,
             body_html=body_html,
             attachments=attachments,
+            in_reply_to=in_reply_to,
+            references=references,
+            content_fingerprint=content_fingerprint,
+            thread_id=thread_id,
         )
 
     except Exception as e:

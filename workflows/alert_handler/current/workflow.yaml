@@ -1,0 +1,35 @@
+version: "1.0"
+name: "告警邮件处理流程"
+enabled: true
+description: "告警类紧急邮件 → 立即通知告警群 → @all"
+
+trigger:
+  mail_type: "告警类"
+  priority: 90
+  match_mode: "first_match"
+  conditions:
+    - field: "classification.priority"
+      operator: "in"
+      value: ["紧急", "普通"]
+
+steps:
+  - id: "notify_alert"
+    type: "action"
+    action: "notify"
+    params:
+      template_name: "alert_notification"
+      context:
+        subject: "${mail.subject}"
+        sender: "${mail.sender}"
+      mention: ["@all"]
+    on_error: "retry_then_abort"
+
+  - id: "save_record"
+    type: "action"
+    action: "save_record"
+    params:
+      record_type: "alert"
+      data:
+        subject: "${mail.subject}"
+        sender: "${mail.sender}"
+    on_error: "skip"

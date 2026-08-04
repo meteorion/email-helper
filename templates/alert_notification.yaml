@@ -1,0 +1,8 @@
+name: "alert_notification"
+type: "markdown"
+content: |
+  ## ⚠️ 告警通知
+  **主题**: {{subject}}
+  **来源**: {{sender}}
+  请立即查看处理！
+mentioned: ["@all"]

@@ -1,0 +1,21 @@
+version: "1.0"
+name: "默认处理流程"
+enabled: true
+description: "所有邮件兜底 → 普通类汇总通知"
+
+trigger:
+  mail_type: "*"
+  priority: 0
+  match_mode: "all"
+
+steps:
+  - id: "save_record"
+    type: "action"
+    action: "save_record"
+    params:
+      record_type: "default"
+      data:
+        subject: "${mail.subject}"
+        sender: "${mail.sender}"
+        category: "${classification.category}"
+    on_error: "skip"
