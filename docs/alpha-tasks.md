@@ -238,14 +238,104 @@ class Database:
 - `cache_size=-64000` — 64MB 页缓存
 
 #### A1.2 数据表创建
-在 `Database.__init__` 中自动执行建表 SQL：
-1. `mails` 表（邮件元数据，字段见 design.md 4.5.3）
-2. `execution_records` 表（流程执行记录）
-3. `seen_message_ids` 表（去重缓存）
-4. `classify_cache` 表（分类结果缓存）
-5. `tasks` 表（容错恢复的任务状态表，见 design.md 12.1）
-6. `failed_notifications` 表（通知失败队列，见 design.md 4.4.5）
-7. 配套索引（按 design.md 4.5.3）
+在 `Database.__init__` 中自动执行建表 SQL（**以下为 Alpha 完整 schema，与 design.md 4.5.3 有增补**）：
+
+```sql
+-- 1. mails 表（邮件元数据）
+CREATE TABLE IF NOT EXISTS mails (
+    message_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL DEFAULT 'default',
+    sender TEXT, sender_domain TEXT, recipient TEXT,
+    subject TEXT, send_time TEXT, receive_time TEXT,
+    body_text TEXT, body_html TEXT, body_file_path TEXT,  -- body_file_path 对应 MailData.local_file_path
+    category TEXT, priority TEXT, confidence REAL DEFAULT 0.0,
+    need_reply INTEGER DEFAULT 0,  -- SQLite 用 INTEGER 存 bool
+    tags TEXT DEFAULT '[]',        -- JSON 数组
+    classify_source TEXT,          -- rule/llm/cache/manual（design.md 原表无此列，Alpha 新增）
+    content_fingerprint TEXT,      -- 内容指纹去重（Alpha 新增）
+    thread_id TEXT,                -- 线程去重（Alpha 新增）
+    in_reply_to TEXT,              -- In-Reply-To 邮件头（Alpha 新增）
+    references_hdr TEXT,           -- References 邮件头（Alpha 新增）
+    status TEXT DEFAULT 'new',     -- new/pending_manual/processing/processed/archived
+    is_read INTEGER DEFAULT 0,
+    is_sent INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_mails_category ON mails(category);
+CREATE INDEX IF NOT EXISTS idx_mails_status ON mails(status);
+CREATE INDEX IF NOT EXISTS idx_mails_send_time ON mails(send_time);
+CREATE INDEX IF NOT EXISTS idx_mails_fingerprint ON mails(content_fingerprint);
+CREATE INDEX IF NOT EXISTS idx_mails_thread ON mails(thread_id);
+
+-- 2. execution_records 表（流程执行记录）
+CREATE TABLE IF NOT EXISTS execution_records (
+    id TEXT PRIMARY KEY,
+    mail_id TEXT, workflow_name TEXT, workflow_version TEXT,
+    status TEXT,  -- success/failed/running/aborted
+    current_step TEXT, context_snapshot TEXT,  -- JSON
+    started_at DATETIME, completed_at DATETIME,
+    error_message TEXT,
+    FOREIGN KEY (mail_id) REFERENCES mails(message_id)
+);
+
+-- 3. seen_message_ids 表（去重缓存）
+CREATE TABLE IF NOT EXISTS seen_message_ids (
+    message_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL DEFAULT 'default',
+    first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. classify_cache 表（分类结果缓存，存完整 ClassifyResult）
+CREATE TABLE IF NOT EXISTS classify_cache (
+    mail_hash TEXT PRIMARY KEY,
+    category TEXT, priority TEXT, confidence REAL,
+    need_reply INTEGER, reason TEXT, source TEXT,  -- Alpha 新增 priority/need_reply/reason/source
+    tags TEXT DEFAULT '[]',                        -- Alpha 新增
+    result_json TEXT,                              -- 完整 ClassifyResult JSON（兜底）
+    classified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME
+);
+
+-- 5. tasks 表（容错恢复的任务状态表）
+CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    type TEXT,           -- mail_fetch / ai_classify / workflow / notification
+    mail_id TEXT,
+    workflow_name TEXT,
+    notification_data TEXT,  -- JSON，通知任务数据（design.md 12.1 原表无此列，Alpha 新增）
+    status TEXT DEFAULT 'pending',  -- pending/running/success/failed/aborted（统一用 success 不用 completed）
+    current_step TEXT,
+    context_data TEXT,    -- JSON
+    attempt_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 3,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    started_at DATETIME,
+    completed_at DATETIME,
+    error_message TEXT,
+    next_retry_at DATETIME
+);
+
+-- 6. failed_notifications 表（通知失败队列，时间字段统一用 Unix 时间戳 REAL）
+CREATE TABLE IF NOT EXISTS failed_notifications (
+    id TEXT PRIMARY KEY,
+    channel TEXT, recipient TEXT,
+    content TEXT,                -- JSON
+    error TEXT,
+    retry_count INTEGER DEFAULT 0,
+    first_failed_at REAL,        -- Unix 时间戳（统一类型，避免 TEXT/REAL 混用）
+    last_failed_at REAL,         -- Unix 时间戳
+    next_retry_at REAL,          -- Unix 时间戳
+    status TEXT DEFAULT 'pending'  -- pending/retrying/given_up
+);
+```
+
+**与 design.md schema 的差异说明：**
+- mails 表新增 `classify_source / content_fingerprint / thread_id / in_reply_to / references_hdr` 5 列
+- classify_cache 表新增 `priority / need_reply / reason / source / tags / result_json` 列，解决缓存无法恢复完整 ClassifyResult 的问题
+- tasks 表新增 `notification_data` 列，状态值统一为 `success`（非 design.md 的 `completed`）
+- failed_notifications 表时间字段统一为 `REAL`（Unix 时间戳），解决 TEXT/REAL 混用导致 `get_retryable()` 永远返回空的问题
+- `body_file_path` 对应 MailData.local_file_path（命名映射在 Repository 层处理）
 
 #### A1.3 邮件元数据仓储
 实现 `src/core/storage/mail_repository.py`：
@@ -256,14 +346,20 @@ class MailRepository:
     def get_mail(message_id: str) -> dict | None           # 查询元数据
     def list_mails(category: str | None,                  # 按分类/状态/日期筛选
                   status: str | None,
+                  search_query: str | None = None,         # Alpha 新增：关键词搜索
                   limit: int = 100,
                   offset: int = 0) -> list[dict]
+    def search_mails(query: str, limit: int = 100) -> list[dict]  # Alpha 新增：全文搜索
     def update_status(message_id: str, status: str) -> None  # new/processing/processed/archived
-    def update_category(message_id: str,                    # 更新 AI 分类结果
+    def update_category(message_id: str,                    # 更新 AI 分类结果（含 source/tags/reason）
                        category: str,
                        priority: str,
                        confidence: float,
-                       need_reply: bool) -> None
+                       need_reply: bool,
+                       source: str,                         # Alpha 新增
+                       reason: str = "",                    # Alpha 新增
+                       tags: list[str] | None = None) -> None  # Alpha 新增
+    def update_tags(message_id: str, tags: list[str]) -> None   # Alpha 新增：单独更新标签
     def count_by_category() -> dict[str, int]              # 按分类统计（统计面板）
     def count_unread() -> int
 ```
@@ -273,16 +369,22 @@ class MailRepository:
 ```python
 class CacheRepository:
     def __init__(self, db: Database)
-    def is_seen(message_id: str, account_id: str) -> bool
-    def mark_seen(message_id: str, account_id: str) -> None
-    def get_all_seen_ids(account_id: str) -> set[str]      # 兼容旧接口
+    def is_seen(message_id: str, account_id: str = "default") -> bool
+    def mark_seen(message_id: str, account_id: str = "default") -> None
+    def get_all_seen_ids(account_id: str = "default") -> set[str]      # 兼容旧接口
     # classify_cache
-    def get_classify_cache(mail_hash: str) -> dict | None  # 返回 {category, confidence, ...}
+    def get_classify_cache(mail_hash: str) -> dict | None  # 返回完整 ClassifyResult dict
     def set_classify_cache(mail_hash: str,
-                           result: dict,
+                           result: dict,                   # 存完整 ClassifyResult（含 priority/source/tags/reason）
                            ttl_hours: int = 24) -> None
     def cleanup_expired_classify_cache() -> int            # 返回清理条数
-    def cleanup_old_seen_ids(days: int = 30) -> int        # 清理近期缓存（永久保留hash前缀）
+    def cleanup_old_seen_ids(days: int = 30) -> int        # 清理近期缓存
+    # 多级去重
+    def is_duplicate_by_fingerprint(fp: str, lookback_days: int = 7) -> bool   # Alpha 新增
+    def mark_fingerprint(fp: str) -> None                                       # Alpha 新增
+    def get_thread_id(in_reply_to: str | None, references: str | None) -> str | None  # Alpha 新增
+    def is_thread_seen(thread_id: str) -> bool                                   # Alpha 新增
+    def mark_thread_seen(thread_id: str) -> None                                 # Alpha 新增
 ```
 
 #### A1.5 执行记录仓储
@@ -427,46 +529,93 @@ def run_security_checks() -> list[CheckResult]:
 class Migration:
     from_version: str      # e.g. "0.1.0"
     to_version: str        # e.g. "0.2.0"
-    def migrate(data_dir: Path, config_dir: Path) -> None  # 迁移逻辑
-    def validate(data_dir: Path, config_dir: Path) -> bool # 迁移后校验
-    def rollback(data_dir: Path, config_dir: Path) -> None # 失败回滚（重命名备份）
+    def migrate(data_dir: Path, config_dir: Path,
+                db: Database, secret_mgr: SecretManager) -> None  # 迁移逻辑（注入 Database 和 SecretManager）
+    def validate(data_dir: Path, config_dir: Path, db: Database) -> bool  # 迁移后校验
+    def rollback(data_dir: Path, config_dir: Path, backup_dir: Path) -> None  # 失败回滚（用 backup 覆盖）
 
 class MigrationManager:
-    def __init__(self, data_dir, config_dir)
+    def __init__(self, data_dir, config_dir, db: Database, secret_mgr: SecretManager)
     def get_current_version() -> str           # 读 data/schema_version.json
     def set_version(version: str) -> None
     def needs_migration() -> bool
     def run_migrations() -> None               # 备份 → 按顺序执行 → 验证 → 更新版本号
     def _backup() -> Path                      # 备份 data/ 和 config/ 到 backup/时间戳/
+    def _restore(backup_dir: Path) -> None     # rollback：把 backup 覆盖回原位
 ```
+
+**注意：** MigrationManager 接收已初始化的 Database 和 SecretManager 实例（由 main.py 按正确顺序注入），迁移脚本不自建 Database。
 
 #### A3.2 MVP→Alpha 具体迁移脚本
 实现 `migrations/v0.1.0_to_v0.2.0.py`：
 
 | 序号 | 迁移项 | 具体操作 |
 |------|--------|----------|
-| 1 | **seen_ids 迁移** | 读取 `data/cache/seen_ids.json` → 写入 SQLite `seen_message_ids` 表 → 原文件重命名 `.migrated` |
+| 1 | **seen_ids 迁移** | 读取 `data/cache/seen_ids.json` → 写入 SQLite `seen_message_ids` 表（**带 account_id="default"**）→ 原文件重命名 `.json.migrated` |
 | 2 | **邮件元数据迁移** | 遍历 `data/mails/*/mail_*.json` → 解析 → 元数据 upsert 到 `mails` 表 → 正文 JSON 文件保留原地 |
-| 3 | **账户密码迁移** | 读取 `config/account.json` 的 `password` base64 → 解码 → `SecretManager.set_secret("accounts.default", pwd)` → 原字段替换为 `password_ref: "secrets.accounts.default"` |
+| 3 | **账户密码迁移** | 读取 `config/account.json` 的 `password` base64 → 解码 → `SecretManager.set_secret("secrets.accounts.default", pwd)` → 原字段替换为 `password_ref: "secrets.accounts.default"` |
 | 4 | **配置文件新增** | 生成默认 `config/ai.json`、`config/notification_channels.yaml`、`rules/custom_rules.yaml` 模板 |
 | 5 | **目录创建** | 新建 `workflows/`、`templates/`、`data/records/`、`data/feedback/`，写入内置示例 YAML |
 | 6 | **schema_version** | 写入 `{"version": "0.2.0", "migrated_at": "..."}` |
 
-**回滚策略：**
-- 迁移前整体备份到 `backup/20260803_153000_{schema}/`
-- 任一步骤失败 → 调用 rollback → 把 backup 覆盖回原位 → 保留 schema_version 不变 → 报告错误
-
-**main.py 集成：**
-在 `AppConfig` 初始化之后、任何业务启动之前，调用：
+**seen_ids.json 格式兼容处理：**
 ```python
-MigrationManager(Path("./data"), Path("./config")).run_migrations()
+def migrate_seen_ids(data_dir, db, account_id="default"):
+    cache_file = data_dir / "cache" / "seen_ids.json"
+    if not cache_file.exists():
+        return
+    data = json.load(open(cache_file, encoding="utf-8"))
+
+    # 兼容两种 MVP 格式
+    if isinstance(data, list):
+        ids = data                          # ["msg1", "msg2", ...]
+    elif isinstance(data, dict):
+        if all(isinstance(v, str) for v in data.values()):
+            ids = list(data.keys())         # {"msg1": "timestamp", ...}
+        elif all(isinstance(v, list) for v in data.values()):
+            # 嵌套格式 {"account1": ["msg1", ...]}
+            for acct, msg_list in data.items():
+                for mid in msg_list:
+                    db.execute(
+                        "INSERT OR IGNORE INTO seen_message_ids (message_id, account_id) VALUES (?, ?)",
+                        (mid, acct))
+            cache_file.rename(cache_file.with_suffix(".json.migrated"))
+            return
+        else:
+            ids = list(data.keys())
+    else:
+        logger.warning(f"seen_ids.json 格式无法识别: {type(data)}")
+        return
+
+    for mid in ids:
+        db.execute(
+            "INSERT OR IGNORE INTO seen_message_ids (message_id, account_id) VALUES (?, ?)",
+            (mid, account_id))  # ← 必须带 account_id，否则违反 NOT NULL
+    cache_file.rename(cache_file.with_suffix(".json.migrated"))
+```
+
+**回滚策略（统一为 backup 覆盖）：**
+- 迁移前整体备份到 `backup/20260803_153000_v0.2.0/`
+- 任一步骤失败 → `_restore(backup_dir)`：把 backup 目录内容覆盖回 `data/` 和 `config/` → 保留 schema_version 不变 → 报告错误
+- **不采用** design.md 4.5.5 中"SQLite 导出回 JSON"的回滚方式（过于复杂且不可靠）
+
+**main.py 集成（注意顺序）：**
+```python
+# main.py 中（已按 A9.1 顺序）
+secret_mgr = SecretManager(...)
+db = Database(data_dir / "data.db")
+migration_mgr = MigrationManager(data_dir, config_dir, db, secret_mgr)
+migration_mgr.run_migrations()  # 在 Database 和 SecretManager 初始化之后
 ```
 
 **验收标准：**
 - [ ] 准备 MVP 数据（30 封邮件+已读标记+缓存）→ 启动 Alpha → 迁移后数据完整可用
 - [ ] `get_current_version()` 返回 "0.2.0"
 - [ ] mails 表记录数 = 原 JSON 文件数
+- [ ] seen_message_ids 表记录数 = 原 seen_ids.json 条目数（account_id 全部为 "default"）
 - [ ] 密码迁移后，IMAP 连接测试成功
+- [ ] seen_ids.json 为 list 格式时迁移成功
+- [ ] seen_ids.json 为 dict 格式时迁移成功
 - [ ] 中途模拟迁移失败（如抛异常）→ rollback 后 MVP 数据原封不动
 - [ ] 单元测试：test_migration.py 构造 mock 数据跑完整流程
 
@@ -753,12 +902,59 @@ def _check_quota() -> bool:
 
 #### A4.7 与邮件拉取集成
 修改 `MailScheduler` + `MailFetchWorker`：
-1. 拉取到新邮件 → `MailStore.save()` → 保存后立即调用 `AIClassifier.classify(mail)`
-2. 分类结果调用 `MailRepository.update_category()` 写入 mails 表
-3. 如果 `auto_confirm=True` → 自动触发 `WorkflowEngine.match_and_run(mail)`（见任务A5）
-4. 如果 `auto_confirm=False` 或 `classify_mode="manual"` → 标记邮件 status = `"pending_manual"`，GUI 中邮件列表行高亮黄色边框
-5. 所有 AI 操作运行在独立 `AIClassifyWorker(QThread)` 中，绝不阻塞拉取线程
-6. **手动触发分类**：GUI 中邮件详情页"🔄 重新分类"按钮 → 调用 `classify(mail, force_ai=True, force_rerun=True)`（强制走 AI，忽略缓存和模式限制）
+1. 拉取到新邮件 → `MailStore.save()` → 保存后将邮件 ID 加入分类队列（`queue.Queue`）
+2. `AIClassifyWorker`（独立 `threading.Thread` daemon）从队列取邮件 → 调用 `AIClassifier.classify(mail)`
+3. 分类结果调用 `MailRepository.update_category()` 写入 mails 表（含 source 字段）
+4. 分类完成后通过 `on_classified` 回调通知 MailScheduler：
+   - 如果 `auto_confirm=True` → 将邮件加入流程队列 → `WorkflowEngine.match_and_run(mail)` 在 Worker 线程执行
+   - 如果 `auto_confirm=False` 或 `classify_mode="manual"` → 标记邮件 status = `"pending_manual"`，GUI 中邮件列表行高亮黄色边框
+5. **绝不阻塞拉取线程**：MailFetchWorker 只负责拉取+保存+入队，分类和流程执行在独立 Worker 线程
+6. **手动触发分类**：GUI 中邮件详情页"🔄 重新分类"按钮 → 调用 `classify(mail, force_ai=True, force_rerun=True)`（强制走 AI，忽略缓存和模式限制），在 Worker 线程执行
+
+**线程模型：**
+```
+MailFetchWorker (Thread)          AIClassifyWorker (Thread)       WorkflowWorker (Thread)
+     │                                  │                               │
+     ├─ IMAP 拉取                        ├─ 从 classify_queue 取邮件     ├─ 从 workflow_queue 取邮件
+     ├─ MailStore.save()                 ├─ AIClassifier.classify()     ├─ WorkflowEngine.run()
+     ├─ classify_queue.put(mail_id) ────→├─ update_category()           ├─ 记录执行结果
+     │                                  └─ on_classified 回调 ────────→└─ 触发通知
+     └─ 继续拉取下一封
+```
+
+**AIClassifier 回调注入机制（避免循环依赖）：**
+```python
+class AIClassifier:
+    def __init__(self, ...):
+        self._on_classified: Callable | None = None
+
+    def set_classified_callback(self, callback: Callable[[MailData, dict], None]):
+        """延迟注入回调，由 main.py 在 WorkflowEngine 初始化后设置"""
+        self._on_classified = callback
+
+    def _do_classify(self, mail: MailData):
+        result = self.classify(mail)
+        MailRepository.update_category(mail.message_id, result)
+        if self._on_classified:
+            self._on_classified(mail, result)
+```
+
+**MailScheduler 构造函数更新：**
+```python
+class MailScheduler:
+    def __init__(self,
+                 imap_client: ImapClient,
+                 mail_store: MailStore,
+                 mail_repository: MailRepository,
+                 classifier: AIClassifier,
+                 workflow_engine: WorkflowEngine,  # 用于 on_classified 回调
+                 interval_minutes: int = 5,
+                 trigger_mode: str = "interval",
+                 ...)
+```
+
+**TaskRecovery 恢复时的异步处理：**
+- `recover_on_startup` 中发现 `status="running"` 的分类/流程任务 → 重新加入对应 Worker 队列（不直接调用 `classify()`，避免阻塞主线程）
 
 **验收标准：**
 - [ ] 规则命中 + override_ai=True → 不调用 LLM，source="rule"
@@ -800,19 +996,56 @@ class WorkflowContext:
                  classify_result: dict,
                  variables: dict,
                  secret_mgr: SecretManager)
-    def get(path: str) -> Any    # "${mail.subject}" / "${steps.step1.output.amount}" / "${variables.timeout:-30}"
+    def get(path: str) -> Any    # "${mail.subject}" / "${variables.timeout:-30}" / "${extracted_info.amount}"
     def set(path: str, value: Any) -> None
-    def set_step_output(step_id: str, output: Any) -> None
+    def set_step_output(step_id: str, output_alias: str, output: Any) -> None
     def snapshot() -> dict       # 持久化断点续传用
     @classmethod
     def from_snapshot(cls, data: dict) -> "WorkflowContext"
 ```
-**变量解析规则：**
-- `${mail.xxx}` → 只读邮件字段
-- `${classification.xxx}` → 只读分类结果
+**变量解析规则（统一语法）：**
+- `${mail.xxx}` → 只读邮件字段（对应 MailData 字段：message_id, sender, sender_domain, recipient, subject, send_time, receive_time, body_text, body_html, is_read, is_sent, in_reply_to, references, attachments）
+- `${classification.xxx}` → 只读分类结果（对应 ClassifyResult 字段：category, priority, need_reply, confidence, reason, source, tags）
 - `${variables.xxx:-default}` → 可读写流程变量，支持默认值
-- `${steps.step_id.output.xxx}` → 可读写步骤输出
+- `${<output_alias>.xxx}` → 步骤输出引用（output_alias 由 YAML step 的 `output` 字段定义，如 `output: "extracted_info"` → 后续用 `${extracted_info.审批金额}` 引用）
 - `${secrets.xxx}` → 委托 `SecretManager.resolve_template`，结果**不写入 snapshot**（安全）
+
+**注意：design.md 4.3.3 中从 `mail.category`/`mail.priority` 取分类字段的写法已过时，统一从 `${classification.xxx}` 取。**
+
+**MailData 模型需扩展（在 A1 中同步修改 models.py）：**
+```python
+@dataclass
+class MailData:
+    # MVP 已有字段
+    message_id: str
+    sender: str
+    sender_domain: str
+    recipient: str
+    subject: str
+    send_time: str
+    receive_time: str
+    body_text: str
+    body_html: str
+    attachments: list[Attachment]
+    is_read: bool
+    is_sent: bool
+    local_file_path: str | None = None
+    # Alpha 新增字段
+    in_reply_to: str | None = None      # 线程去重
+    references: str | None = None       # 线程去重
+    content_fingerprint: str | None = None  # 内容指纹去重
+    thread_id: str | None = None        # 线程 ID
+    category: str | None = None         # 分类结果（冗余字段，方便查询）
+    priority: str | None = None         # 优先级（冗余字段）
+    confidence: float = 0.0             # 置信度
+    need_reply: bool = False            # 需回复
+    tags: list[str] = field(default_factory=list)  # 标签
+    classify_source: str | None = None  # 分类来源: rule/llm/cache/manual
+    status: str = "new"                 # new/pending_manual/processing/processed/archived
+```
+- `category/priority/confidence/need_reply/tags/classify_source` 是分类结果的冗余写入（写入 mails 表），方便 SQL 查询过滤
+- WorkflowContext 的 `${classification.xxx}` 从 `classify_result` dict 取（不依赖 mail 对象上的冗余字段），保证数据一致性
+- `body_text` 作为 `${mail.body}` 的别名（`get("mail.body")` 返回 `body_text`）
 
 #### A5.2 条件表达式解析器
 实现 `src/workflow/condition.py`：
@@ -893,9 +1126,20 @@ class BaseAction:
 实现 `src/workflow/engine.py`：
 ```python
 class WorkflowEngine:
-    def __init__(self, loader: WorkflowLoader,
-                       execution_repo: ExecutionRepository,
-                       secret_mgr: SecretManager)
+    def __init__(self,
+                 loader: WorkflowLoader,
+                 execution_repo: ExecutionRepository,
+                 secret_mgr: SecretManager,
+                 notification_engine: "NotificationEngine",  # notify Action 依赖
+                 llm_client: "LLMClient",                    # extract_info/summarize Action 依赖
+                 smtp_client: "SmtpClient",                  # auto_reply/forward Action 依赖
+                 mail_repository: "MailRepository",          # tag/move_to_folder Action 依赖
+                 imap_client: "ImapClient")                  # move_to_folder Action 依赖
+```
+- 所有 Action 依赖通过构造函数注入，Engine 内部构建 Action 实例时传入
+- Action 基类增加 `dependencies` 属性声明所需依赖，Engine 据此校验
+
+```python
     def match_and_run(mail: MailData,
                       classify_result: dict,
                       account_id: str = "default") -> list[str]
@@ -903,7 +1147,7 @@ class WorkflowEngine:
         匹配所有 enabled 且 trigger 条件满足的流程，逐一异步执行
         返回执行的 execution_id 列表
 
-        触发模式（trigger_mode，在 workflow YAML 中配置）:
+        触发模式（match_mode，在 workflow YAML trigger 中配置）:
         - "all"（默认）: 所有匹配的流程都执行
         - "first_match": 按流程 priority 降序，仅执行第一个匹配的流程
         - "priority_order": 按 priority 降序顺序执行，前一个失败则不执行后续
@@ -1057,27 +1301,83 @@ class TokenBucket:
     def acquire(timeout: float | None) -> bool  # 线程安全
         # 先 _refill() → 有令牌 return True
         # 没令牌 → 等下一次 refill 时间，最多 timeout
+        # wait_time = max(0, self.refill_interval - (time.time() - self.last_refill))  # 防负值
 ```
 默认配置：`capacity=20, refill_interval_ms=3000`（每 3 秒补充 1 个，上限 20，符合企微 20 条/分钟限制）
+- **所有配置统一为 20**（design.md 的 `max_per_minute=18` 已修正为 20，GUI 显示也用 20）
 
-#### A6.4 通知队列（优先级 + 聚合 + 冷却）
+#### A6.4 通知队列（优先级 + 聚合 + 冷却 + DND）
 实现 `src/notification/queue.py`：
 ```python
 class NotificationQueue:
     """
-    入队时:
-    1. 检查冷却（same_sender 5min / same_subject 10min / global 3条后暂停1min）
-    2. 冷却未通过 → return False
-    3. 队列满 overflow_strategy=drop_oldest → 弹出旧的入新的
+    使用 heapq 优先级队列（非单一 deque），紧急优先出队。
 
-    出队（process_queue 循环线程）:
-    1. 优先取紧急 priority 队列
-    2. aggregation.enabled 情况下，普通邮件 5 分钟窗口合并:
+    入队时 (加锁):
+    1. 检查 DND 时段 → 在 DND 内且非紧急 → 标记 deferred_until=次日08:00，入延迟队列
+    2. 检查冷却（same_sender 5min / same_subject 10min / global 3条后暂停1min）
+    3. 冷却未通过 → return False
+    4. 队列满 overflow_strategy=drop_oldest → 弹出旧的入新的
+
+    出队（process_queue 循环线程，加锁）:
+    1. 优先取紧急 priority 队列（heapq 优先级排序）
+    2. 检查 deferred_until → 未到时间的跳过
+    3. aggregation.enabled 情况下，普通邮件 5 分钟窗口合并:
        相同分类的 N 条 → 变成 "您有 N 封新审批邮件待处理..." 汇总消息
-    3. token_bucket.acquire() → 成功 → _send_notification()
-    4. 发送成功 → update_cooldown_tracker
-    5. 发送失败 → 交给 retry_handler（见下）
+    4. token_bucket.acquire() → 成功 → _send_notification()
+    5. 发送成功 → _update_cooldown（**必须在锁内**，避免 TOCTOU 竞态）
+    6. 发送失败 → 交给 retry_handler（见下）
     """
+    def __init__(self, ...):
+        self._heap = []          # heapq 优先级队列
+        self._deferred = []      # DND 延迟队列
+        self._lock = threading.Lock()  # 所有操作加锁
+        self._cooldown = {}      # {key: last_send_time}
+        self._global_count = 0   # 全局发送计数（冷却用）
+        self._global_reset_at = 0.0
+```
+
+**冷却实现（含全局冷却，全部在锁内操作）：**
+```python
+def _check_cooldown(self, notification: dict) -> tuple[bool, str]:
+    with self._lock:
+        # same_sender 冷却
+        sender = notification.get("sender", "")
+        if sender and time.time() - self._cooldown.get(f"sender:{sender}", 0) < 300:
+            return False, "same_sender 5min cooldown"
+        # same_subject 冷却
+        subject = notification.get("subject", "")
+        if subject and time.time() - self._cooldown.get(f"subject:{subject}", 0) < 600:
+            return False, "same_subject 10min cooldown"
+        # global 冷却：3 条后暂停 1 分钟
+        if time.time() > self._global_reset_at:
+            self._global_count = 0
+            self._global_reset_at = time.time() + 60
+        if self._global_count >= 3:
+            return False, "global 3/min cooldown"
+        return True, ""
+
+def _update_cooldown(self, notification: dict):
+    """发送成功后调用，必须在锁内"""
+    with self._lock:
+        sender = notification.get("sender", "")
+        subject = notification.get("subject", "")
+        if sender:
+            self._cooldown[f"sender:{sender}"] = time.time()
+        if subject:
+            self._cooldown[f"subject:{subject}"] = time.time()
+        self._global_count += 1
+```
+
+**DND 延迟队列项结构：**
+```python
+# 队列 item 完整结构
+{
+    'notification': dict,
+    'priority': '紧急' | '普通' | '低优先级',  # 紧急=3, 普通=2, 低=1（heapq 用负数排序）
+    'enqueued_at': float,          # Unix 时间戳
+    'deferred_until': float | None # Unix 时间戳，None=立即发送，非None=DND延迟
+}
 ```
 
 #### A6.5 重试处理器 + 失败持久化队列
@@ -1085,8 +1385,18 @@ class NotificationQueue:
 - **指数退避**：5s → 15s → 45s，`backoff_multiplier=3`，抖动 ±10%
 - **错误分类**：`network/timeout/rate_limit` 可重试，`invalid_param/auth_failed` 不重试
 - **RateLimitError 特殊处理**：固定等待 60 秒
-- **失败后**：写入 `failed_notifications` SQLite 表（含 next_retry_at）
+- **失败后**：写入 `failed_notifications` SQLite 表（含 next_retry_at，**统一用 Unix 时间戳 REAL 类型**）
 - **后台重试线程**：每 30 分钟扫描一次 `failure_queue.get_retryable()`，过期（24h）自动放弃并记 ERROR 日志
+- **get_retryable 修复**：
+  ```python
+  def get_retryable(self) -> list[dict]:
+      now = time.time()  # Unix 时间戳
+      rows = self.db.execute(
+          "SELECT * FROM failed_notifications WHERE next_retry_at <= ? AND status != 'given_up'",
+          (now,)  # next_retry_at 也是 Unix 时间戳，类型匹配
+      )
+      return rows
+  ```
 
 #### A6.6 免打扰时段（DND）
 在 `NotificationEngine` 中实现：
@@ -1107,7 +1417,9 @@ def _check_dnd(now: datetime) -> bool:
     end: "08:00"
     bypass_for_urgent: true
   ```
-- DND 延迟队列复用 `NotificationQueue`，标记 `deferred_until: 次日08:00`
+- DND 检查时机：在 `send_async` 中，渲染模板后、入队前检查 `_check_dnd()`
+  - 在 DND 内且非紧急 → 设置 `deferred_until = 次日08:00 的 Unix 时间戳`，入队时带上
+  - `process_queue` 中跳过 `deferred_until > now` 的项，到时间后自动发送
 
 #### A6.7 通知分发主引擎
 实现 `src/notification/engine.py`：
@@ -1133,7 +1445,8 @@ class NotificationEngine:
         流程:
         1. 根据 routing.by_category + by_priority 选择 channels
         2. template.render → 渲染 markdown/text
-        3. 入 NotificationQueue
+        3. 检查 DND（_check_dnd）→ 在 DND 内且非紧急 → 设置 deferred_until
+        4. 入 NotificationQueue（队列内部检查冷却）
         """
 ```
 
@@ -1497,30 +1810,49 @@ Temperature: [0.1]
 **具体工作：**
 
 #### A9.1 main.py 初始化顺序
-最终启动流程：
+最终启动流程（**顺序严格按依赖链排列，不可调换**）：
 ```
-1. 加载配置 AppConfig
-2. 初始化日志（加载 SanitizeFilter）
-3. MigrationManager.run_migrations()  ← MVP→Alpha
-4. 安全检查 run_security_checks()
-5. SecretManager 初始化
-6. Database (SQLite) + 所有 Repository 初始化
-7. LLMClient → RuleEngine → CacheManager → FeedbackManager → AIClassifier
-8. WorkflowLoader → WorkflowEngine（注入所有 Action 依赖）
-9. TemplateEngine → 各 Channel → NotificationEngine
-10. GUI MailApp 启动
-11. TaskRecovery.recover_on_startup(三大引擎注入)
-12. ImapClient 连接 / MailScheduler 启动
-13. GUI 上已有邮件元数据加载显示
+ 1. 加载配置 AppConfig
+ 2. 初始化日志（加载 SanitizeFilter）
+ 3. SecretManager 初始化          ← 必须在 Migration 之前，迁移脚本要用它存密码
+ 4. 安全检查 run_security_checks()
+ 5. Database (SQLite) + 所有 Repository 初始化  ← 迁移脚本要用 Database 写表
+ 6. MigrationManager.run_migrations()  ← MVP→Alpha（依赖 SecretManager + Database）
+ 7. TemplateEngine → 各 Channel → NotificationEngine  ← 必须在 WorkflowEngine 之前
+ 8. LLMClient → RuleEngine → CacheManager → FeedbackManager
+ 9. WorkflowLoader → WorkflowEngine（注入 NotificationEngine + LLMClient + SmtpClient + MailRepository）
+10. AIClassifier（注入 LLMClient + RuleEngine + CacheManager + FeedbackManager）
+    → 设置 AIClassifier.on_classified 回调 = WorkflowEngine.match_and_run（延迟注入，避免循环依赖）
+11. ConfigWatcher 启动（注册规则/流程/模板/配置文件监听）
+12. GUI MailApp 启动
+13. TaskRecovery.recover_on_startup(三大引擎注入)  ← 恢复的任务通过 Worker 异步执行，不阻塞
+14. ImapClient 连接 / MailScheduler 启动（注入 AIClassifier + WorkflowEngine + MailRepository）
+15. GUI 上已有邮件元数据加载显示
 ```
 
-#### A9.2 失败链路测试清单
-手动验证：
+**关键依赖说明：**
+- SecretManager → MigrationManager：迁移脚本用 `SecretManager.set_secret()` 存密码
+- Database → MigrationManager：迁移脚本写入 SQLite 表
+- NotificationEngine → WorkflowEngine：notify Action 依赖 NotificationEngine
+- WorkflowEngine → AIClassifier：AIClassifier 通过回调 `on_classified` 触发 WorkflowEngine（延迟注入避免循环）
+- TaskRecovery → MailScheduler：恢复完成后再启动调度，避免重复拉取
+
+#### A9.2 失败链路测试清单 + Flet API 统一
+**Flet API 版本统一（先修）：**
+- [ ] 全局搜索 `page.snack_bar =` 和 `page.show_snack_bar(` → 统一为 `page.open(ft.SnackBar(...))` （Flet 0.25+ API）
+- [ ] 全局搜索 `QThread` → 替换为 `threading.Thread`（本项目用 Flet 不用 Qt）
+- [ ] 确认 `page.window.width` / `page.window.close()` 使用新 API（Flet 0.22+），与 SnackBar 统一版本
+
+**失败链路验证：**
 - [ ] 断网启动 → 所有组件降级可用，分类结果 confidence=0.0 进入人工，程序不崩溃
 - [ ] LLM API Key 错误 → 自动降级规则分类，GUI  SnackBar："AI 连接失败，已降级为规则"
 - [ ] 企微 Webhook 失效 → 通知失败后进入失败队列，24h 内不丢失
 - [ ] 删除 secrets.enc → 启动引导重新输入密码/API Key/Webhook
 - [ ] 高并发场景：连续 50 封邮件到达 → AI/流程/通知队列不丢，SQLite 无写冲突
+- [ ] 初始化顺序验证：SecretManager → Database → Migration → NotificationEngine → WorkflowEngine → AIClassifier → MailScheduler，无 None 注入错误
+- [ ] 迁移脚本验证：seen_ids.json 为 list/dict/嵌套格式均能正确迁移
+- [ ] failed_notifications 表：插入失败记录 → get_retryable() 正确返回（时间戳类型一致）
+- [ ] 通知队列优先级：紧急邮件先于普通邮件发送
 
 #### A9.3 requirements.txt 增量
 ```
@@ -1977,7 +2309,22 @@ A9 (集成联调)
 - 新增第三方库：`PyYAML`, `requests`, `cryptography`, `chardet`（`keyring` 可选）
 - SQLite 使用标准库 `sqlite3`，WAL 模式
 - GUI 不变：Flet，不引入额外 GUI 依赖
+- **Flet API 统一为 0.25+**：`page.open(ft.SnackBar(...))` 而非 `page.snack_bar =` / `page.show_snack_bar()`；不使用 Qt 的 `QThread`，统一用 `threading.Thread`
 - 网络请求全部超时设置（AI/HTTP/Webhook 一律 ≤ 30s）
 - 所有新增线程：`daemon=True`，确保程序退出自动结束
 - 错误分级：**绝不允许任何引擎异常导致主程序崩溃**，永远降级或进入失败队列
 - 敏感数据：配置/代码/日志中绝不明文出现 password / api_key / webhook key
+
+## 与 design.md 的已知差异（Alpha 以本文档为准）
+
+| 差异点 | design.md 原文 | Alpha 修正 | 原因 |
+|--------|---------------|-----------|------|
+| mails 表 schema | 缺 source/fingerprint/thread_id/in_reply_to/references | 新增 5 列 | A4.6 分类来源、A1.5.1 多级去重需要 |
+| classify_cache 表 | 仅 category/confidence | 新增 priority/need_reply/reason/source/tags/result_json | 缓存需恢复完整 ClassifyResult |
+| tasks 表 | 缺 notification_data，状态用 completed | 新增 notification_data 列，状态统一用 success | A7.1 通知任务数据存储、状态值一致性 |
+| failed_notifications 时间字段 | DATETIME（ISO 字符串） | 统一为 REAL（Unix 时间戳） | 避免TEXT/REAL 混用导致 get_retryable() 失效 |
+| WorkflowContext | 从 mail.category 取分类字段 | 从 classify_result dict 取 | 分类结果应从独立参数取，不依赖 mail 冗余字段 |
+| step output 变量语法 | `${steps.step_id.output.xxx}` 和 `${alias.xxx}` 矛盾 | 统一为 `${output_alias.xxx}`（由 step.output 字段定义别名） | 三处描述不一致，统一语法 |
+| rate_limit 数值 | max_per_minute=18 vs token_bucket=20 | 统一为 20 | 企微实际限制 20 条/分钟 |
+| 回滚策略 | SQLite 导出回 JSON | backup 目录覆盖 | 导出回 JSON 复杂且不可靠 |
+| 迁移脚本 seen_ids INSERT | 缺 account_id | 补 account_id="default" | seen_message_ids.account_id 是 NOT NULL |
