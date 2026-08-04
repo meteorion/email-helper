@@ -2798,9 +2798,9 @@ def main(page: ft.Page):
 
       <div class="reply-section">
         <div class="reply-quick-actions">
-          <button class="quick-action">↩️ 回复</button>
-          <button class="quick-action">↪️ 全部回复</button>
-          <button class="quick-action">🔀 转发</button>
+          <button class="quick-action">回复</button>
+          <button class="quick-action">全部回复</button>
+          <button class="quick-action">转发</button>
         </div>
         <div class="reply-input-wrap">
           <div class="reply-toolbar">
@@ -2819,7 +2819,7 @@ def main(page: ft.Page):
             点击此处输入回复内容... （<u>Ctrl + Enter</u> 发送）
           </div>
           <div class="reply-footer">
-            <button class="send-btn">📤 发送</button>
+            <button class="send-btn">发送</button>
             <div class="reply-footer-spacer"></div>
             <div class="reply-btn" title="定时发送">🕐</div>
             <div class="reply-btn" title="草稿">💾</div>
@@ -3138,8 +3138,8 @@ def main(page: ft.Page):
         </div>
         <div class="ai-reason"><strong>分类理由:</strong> 邮件主题包含「审批」「预算」关键词，正文提及金额 125,000 元，含 Excel 附件，符合审批类邮件特征。</div>
         <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
-          <button class="ai-btn ai-btn-primary">📝 修正分类</button>
-          <button class="ai-btn">🔄 重新分类 ▾</button>
+          <button class="ai-btn ai-btn-primary">修正分类</button>
+          <button class="ai-btn">重新分类 ▾</button>
           <p style="font-size:11px; color:#6b7280; margin-left:8px;">3 种模式: 按当前模式 / 强制AI(force_ai) / 强制规则(force_rule)</p>
         </div>
       </div>
@@ -3194,9 +3194,9 @@ def main(page: ft.Page):
           <div class="ai-settings-label">运行模式:</div>
           <div class="ai-settings-control">
             <div class="ai-radio-group" role="radiogroup" aria-label="分类模式">
-              <button class="ai-radio-btn" aria-label="manual">🧑‍💼 Manual (人工)</button>
-              <button class="ai-radio-btn active" aria-label="hybrid">🔀 Hybrid (混合)</button>
-              <button class="ai-radio-btn" aria-label="auto">🤖 Auto (自动)</button>
+              <button class="ai-radio-btn" aria-label="manual">Manual (人工)</button>
+              <button class="ai-radio-btn active" aria-label="hybrid">Hybrid (混合)</button>
+              <button class="ai-radio-btn" aria-label="auto">Auto (自动)</button>
             </div>
             <p style="font-size:11px; color:#6b7280; margin-top:6px;">Hybrid: 规则预筛 → AI 推理 → 置信度阈值决定是否进人工队列</p>
           </div>
@@ -3303,9 +3303,9 @@ def main(page: ft.Page):
   "reason": "分类理由(50字内)"
 }</textarea>
         <div style="display:flex; gap:8px; margin-top:10px;">
-          <button class="ai-btn ai-btn-primary">💾 保存</button>
-          <button class="ai-btn">🔄 恢复默认</button>
-          <button class="ai-btn">🧪 测试 Prompt</button>
+          <button class="ai-btn ai-btn-primary">保存</button>
+          <button class="ai-btn">恢复默认</button>
+          <button class="ai-btn">测试 Prompt</button>
         </div>
       </div>
     </div>
@@ -3473,8 +3473,8 @@ def main(page: ft.Page):
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:6px;">
-            <button class="ai-btn ai-btn-primary">✉️ 写邮件</button>
-            <button class="ai-btn">✏️ 编辑</button>
+            <button class="ai-btn ai-btn-primary">写邮件</button>
+            <button class="ai-btn">编辑</button>
           </div>
         </div>
         <div class="contact-detail-section">
@@ -3737,8 +3737,8 @@ def main(page: ft.Page):
             <div class="settings-toggle on" role="switch" aria-checked="true" aria-label="启用流程"></div> 启用
           </label>
           <span style="font-size:12px; color:#6b7280;">优先级: <strong style="color:#1e40af;">100</strong></span>
-          <button class="ai-btn">🗑️ 删除</button>
-          <button class="ai-btn ai-btn-primary">💾 保存</button>
+          <button class="ai-btn">删除</button>
+          <button class="ai-btn ai-btn-primary">保存</button>
         </div>
         <textarea class="yaml-editor" aria-label="YAML 编辑器">name: approval_handler
 version: 1.1
@@ -3839,7 +3839,7 @@ steps:
             <option>📅 会议类</option>
             <option>💬 协作类</option>
           </select>
-          <button class="ai-btn ai-btn-primary">💾 保存</button>
+          <button class="ai-btn ai-btn-primary">保存</button>
         </div>
         <!-- 变量 chips -->
         <div style="margin-bottom:12px;">
@@ -3895,8 +3895,8 @@ steps:
         <div style="font-size:12px; color:#6b7280;">Webhook: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx · 群: 研发通知群</div>
       </div>
       <div class="settings-toggle on" role="switch" aria-checked="true" aria-label="启用企微"></div>
-      <button class="ai-btn">🧪 测试</button>
-      <button class="ai-btn">✏️</button>
+      <button class="ai-btn">测试</button>
+      <button class="ai-btn">编辑</button>
     </div>
     <div class="channel-card">
       <div class="channel-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa);">📧</div>
@@ -3905,8 +3905,8 @@ steps:
         <div style="font-size:12px; color:#6b7280;">转发至: manager@company.com, alert@company.com</div>
       </div>
       <div class="settings-toggle on" role="switch" aria-checked="true" aria-label="启用邮件转发"></div>
-      <button class="ai-btn">🧪 测试</button>
-      <button class="ai-btn">✏️</button>
+      <button class="ai-btn">测试</button>
+      <button class="ai-btn">编辑</button>
     </div>
     <div class="channel-card">
       <div class="channel-icon" style="background:linear-gradient(135deg,#f59e0b,#fb923c);">🔗</div>
@@ -3915,8 +3915,8 @@ steps:
         <div style="font-size:12px; color:#6b7280;">POST https://hooks.internal.com/mail-notify · 含签名校验</div>
       </div>
       <div class="settings-toggle on" role="switch" aria-checked="true" aria-label="启用 Webhook"></div>
-      <button class="ai-btn">🧪 测试</button>
-      <button class="ai-btn">✏️</button>
+      <button class="ai-btn">测试</button>
+      <button class="ai-btn">编辑</button>
     </div>
     <div class="channel-card">
       <div class="channel-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa);">📱</div>
@@ -3978,9 +3978,9 @@ steps:
           <div class="ai-settings-label">模式选择:</div>
           <div class="ai-settings-control">
             <div class="ai-radio-group" role="radiogroup" aria-label="拉取模式">
-              <button class="ai-radio-btn active">🚀 IDLE (推荐)</button>
-              <button class="ai-radio-btn">🔄 轮询</button>
-              <button class="ai-radio-btn">🔀 混合</button>
+              <button class="ai-radio-btn active">IDLE (推荐)</button>
+              <button class="ai-radio-btn">轮询</button>
+              <button class="ai-radio-btn">混合</button>
             </div>
             <p style="font-size:11px; color:#6b7280; margin-top:6px;">IDLE 模式实时性高（秒级），25 分钟自动重连；IDLE 失败时自动降级为轮询</p>
           </div>
@@ -4098,9 +4098,9 @@ steps:
       <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:#6b7280;">
         <input type="checkbox" checked> 自动滚动
       </label>
-      <button class="ai-btn">⏸️ 暂停</button>
-      <button class="ai-btn">🗑️ 清空</button>
-      <button class="ai-btn ai-btn-primary">📥 导出</button>
+      <button class="ai-btn">暂停</button>
+      <button class="ai-btn">清空</button>
+      <button class="ai-btn ai-btn-primary">导出</button>
     </div>
     <!-- 日志查看器 -->
     <div class="log-viewer">
@@ -4207,7 +4207,7 @@ steps:
             <div style="font-size:11px; color:#6b7280;">已下载 28/42 · 速度 1.2 MB/s</div>
           </div>
         </div>
-        <button class="ai-btn" style="color:#dc2626; border-color:#fca5a5;">✕ 取消</button>
+        <button class="ai-btn" style="color:#dc2626; border-color:#fca5a5;">取消</button>
       </div>
       <div class="worker-progress-bar">
         <div class="worker-progress-fill" style="width:66%;"></div>
@@ -4227,7 +4227,7 @@ steps:
             <div style="font-size:11px; color:#6b7280;">已分类 15/28 · 平均 1.2s/封</div>
           </div>
         </div>
-        <button class="ai-btn" style="color:#dc2626; border-color:#fca5a5;">✕ 取消</button>
+        <button class="ai-btn" style="color:#dc2626; border-color:#fca5a5;">取消</button>
       </div>
       <div class="worker-progress-bar">
         <div class="worker-progress-fill" style="width:53%; background:linear-gradient(90deg,#8b5cf6,#a78bfa);"></div>
@@ -4247,7 +4247,7 @@ steps:
             <div style="font-size:11px; color:#6b7280;">budget_q3.xlsx · 2.3MB / 8MB</div>
           </div>
         </div>
-        <button class="ai-btn" style="color:#dc2626; border-color:#fca5a5;">✕ 取消</button>
+        <button class="ai-btn" style="color:#dc2626; border-color:#fca5a5;">取消</button>
       </div>
       <div class="worker-progress-bar">
         <div class="worker-progress-fill" style="width:28%; background:linear-gradient(90deg,#10b981,#34d399);"></div>
@@ -4267,7 +4267,7 @@ steps:
             <div style="font-size:11px; color:#16a34a;">✅ 5 步骤全部成功 · 总耗时 2.3s</div>
           </div>
         </div>
-        <button class="ai-btn">📜 查看日志</button>
+        <button class="ai-btn">查看日志</button>
       </div>
     </div>
     <!-- 任务5: 失败 -->
@@ -4280,7 +4280,7 @@ steps:
             <div style="font-size:11px; color:#dc2626;">❌ HTTP 502 Bad Gateway · 已重试 3/3</div>
           </div>
         </div>
-        <button class="ai-btn">🔄 重试</button>
+        <button class="ai-btn">重试</button>
       </div>
     </div>
   </div>
@@ -4311,8 +4311,8 @@ steps:
           <div style="font-size:11px; color:#6b7280;">2.1 MB · PDF 文档 · 已自动下载</div>
         </div>
         <span class="email-tag" style="background:#dcfce7; color:#166534; padding:3px 10px;">✓ 已下载</span>
-        <button class="attach-download-btn">📂 打开</button>
-        <button class="attach-download-btn">📁 在文件夹中显示</button>
+        <button class="attach-download-btn">打开</button>
+        <button class="attach-download-btn">在文件夹中显示</button>
       </div>
     </div>
 
@@ -4325,7 +4325,7 @@ steps:
           <div style="font-size:11px; color:#6b7280;">8.0 MB · Excel 表格 · 需手动下载</div>
         </div>
         <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:3px 10px;">⏳ 待下载</span>
-        <button class="attach-download-btn primary">⬇️ 下载</button>
+        <button class="attach-download-btn primary">下载</button>
       </div>
     </div>
 
@@ -4338,7 +4338,7 @@ steps:
           <div style="font-size:11px; color:#92400e;">⚠️ 78.5 MB · 视频文件 · 大文件需确认下载</div>
         </div>
         <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:3px 10px;">⚠️ 需确认</span>
-        <button class="attach-download-btn primary">⬇️ 确认下载</button>
+        <button class="attach-download-btn primary">确认下载</button>
       </div>
       <div style="margin-top:10px; padding:8px 12px; background:white; border-radius:6px; font-size:11px; color:#6b7280;">
         💡 提示: 此附件较大 (78.5 MB)，下载可能需要 1-2 分钟，建议在 Wi-Fi 环境下载
@@ -4354,7 +4354,7 @@ steps:
           <div style="font-size:11px; color:#dc2626;">🚫 256 MB · 压缩包 · 超过 200MB 限制，已拒绝下载</div>
         </div>
         <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:3px 10px;">🚫 已拒绝</span>
-        <button class="attach-download-btn">📋 复制元信息</button>
+        <button class="attach-download-btn">复制元信息</button>
       </div>
     </div>
 
@@ -4367,7 +4367,7 @@ steps:
           <div style="font-size:11px; color:#dc2626;">🛡️ 4.2 MB · 可执行文件 · 危险类型已拦截</div>
         </div>
         <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:3px 10px;">🛡️ 已拦截</span>
-        <button class="attach-download-btn danger">⚠️ 强制下载 (不推荐)</button>
+        <button class="attach-download-btn danger">强制下载 (不推荐)</button>
       </div>
       <div style="margin-top:10px; padding:8px 12px; background:white; border-radius:6px; font-size:11px; color:#dc2626;">
         ⚠️ 警告: .exe 文件可能包含恶意代码，已根据 blocked_extensions 配置自动拦截。如确需下载，请确认来源可信。
@@ -4381,8 +4381,8 @@ steps:
         <span style="font-size:13px; color:#374151;">已选择 3 个附件 (共 10.1 MB)</span>
       </div>
       <div style="display:flex; gap:8px;">
-        <button class="attach-download-btn primary">⬇️ 批量下载选中</button>
-        <button class="attach-download-btn">📦 全部打包下载</button>
+        <button class="attach-download-btn primary">批量下载选中</button>
+        <button class="attach-download-btn">全部打包下载</button>
       </div>
     </div>
   </div>
