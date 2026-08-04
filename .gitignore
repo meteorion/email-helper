@@ -22,3 +22,8 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+# Runtime data
+backup/
+data/
+config/secrets.enc
+config/app.json

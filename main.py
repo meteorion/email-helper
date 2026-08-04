@@ -217,8 +217,9 @@ def main(page):
     logger.info("ConfigWatcher 启动")
 
     # ── 12. GUI 启动 ─────────────────────────────
-    from src.gui.theme import APP_THEME
-    page.theme = APP_THEME
+    from src.gui.theme import LIGHT_THEME, DARK_THEME
+    page.theme = LIGHT_THEME
+    page.dark_theme = DARK_THEME
     page.theme_mode = ft.ThemeMode.LIGHT
 
     from src.gui.main_window import MailApp
@@ -332,7 +333,9 @@ def main(page):
 
         except Exception as e:
             logger.error(f"邮件服务初始化失败: {e}", exc_info=True)
-            page.open(ft.SnackBar(content=ft.Text(f"初始化失败: {e}")))
+            _sb = ft.SnackBar(content=ft.Text(f"初始化失败: {e}"), open=True)
+            page.overlay.append(_sb)
+            page.update()
 
     # 启动流程
     if account_config:
@@ -400,4 +403,8 @@ def _load_account_config(config_dir: Path, secret_mgr: SecretManager) -> dict | 
 
 if __name__ == "__main__":
     import flet as ft
-    ft.run(main)
+    import os
+    if os.environ.get("FLET_FORCE_WEB_SERVER"):
+        ft.run(main, view=ft.AppView.FLET_APP_WEB, host="0.0.0.0", port=8765)
+    else:
+        ft.run(main)
