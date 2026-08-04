@@ -19,52 +19,49 @@ class AccountDialog:
         self.config_path = Path(config_path)
         self._account_data = {}
 
-        # 表单字段
+        # 表单字段（无图标，圆角统一 6px）
         self.email_input = ft.TextField(
             label="邮箱地址",
             hint_text="your@email.com",
-            prefix_icon=ft.Icons.EMAIL,
-            border_radius=8,
+            border_radius=6,
         )
         self.password_input = ft.TextField(
             label="密码",
             hint_text="邮箱密码或授权码",
             password=True,
             can_reveal_password=True,
-            prefix_icon=ft.Icons.LOCK,
-            border_radius=8,
+            border_radius=6,
         )
 
         self.imap_host = ft.TextField(
             label="IMAP 服务器",
             value="imap.exmail.qq.com",
-            border_radius=8,
+            border_radius=6,
         )
         self.imap_port = ft.TextField(
             label="IMAP 端口",
             value="993",
             width=100,
-            border_radius=8,
+            border_radius=6,
         )
         self.imap_ssl = ft.Checkbox(label="使用 SSL 加密", value=True)
 
         self.smtp_host = ft.TextField(
             label="SMTP 服务器",
             value="smtp.exmail.qq.com",
-            border_radius=8,
+            border_radius=6,
         )
         self.smtp_port = ft.TextField(
             label="SMTP 端口",
             value="465",
             width=100,
-            border_radius=8,
+            border_radius=6,
         )
         self.smtp_ssl = ft.Checkbox(label="使用 SSL 加密", value=True)
 
         self._status_text = ft.Text(size=12, color=ft.Colors.GREY_500)
         self._test_btn = ft.OutlinedButton(
             "测试连接",
-            icon=ft.Icons.NETWORK_CHECK,
             on_click=self._on_test_connection,
         )
 
@@ -104,6 +101,8 @@ class AccountDialog:
 
     def show(self):
         """显示对话框"""
+        if self._dialog not in self.page.overlay:
+            self.page.overlay.append(self._dialog)
         self._dialog.open = True
         self.page.update()
 

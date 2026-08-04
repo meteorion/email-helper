@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.core.config import AppConfig
 from src.core.logger import setup_logging, get_logger
-from src.gui.theme import APP_THEME
+from src.gui.theme import LIGHT_THEME, DARK_THEME
 from src.gui.main_window import MailApp
 from src.gui.account_dialog import AccountDialog
 from src.gui.worker import MailFetchWorker
@@ -62,8 +62,9 @@ def main(page: ft.Page):
     logger.info(f"日志级别: {log_level}")
     logger.info("=" * 50)
 
-    # 3. 应用主题
-    page.theme = APP_THEME
+    # 3. 应用主题（深浅双主题，默认浅色）
+    page.theme = LIGHT_THEME
+    page.dark_theme = DARK_THEME
     page.theme_mode = ft.ThemeMode.LIGHT
 
     # 4. 检查账户配置
@@ -163,7 +164,9 @@ def main(page: ft.Page):
         def _on_fetch_error(msg):
             app.set_fetch_button_enabled(True)
             logger.error(f"拉取失败: {msg}")
-            page.show_snack_bar(ft.SnackBar(content=ft.Text(f"拉取失败: {msg}")))
+            _sb = ft.SnackBar(content=ft.Text(f"拉取失败: {msg}"), open=True)
+            page.overlay.append(_sb)
+            page.update()
 
         def _do_select(message_id):
             mail = mail_store.load(message_id)
@@ -177,9 +180,9 @@ def main(page: ft.Page):
                 new_data = dialog.get_account_data()
                 if new_data:
                     logger.info("账户配置已更新")
-                    page.show_snack_bar(
-                        ft.SnackBar(content=ft.Text("配置已更新，重启后生效"))
-                    )
+                    _sb = ft.SnackBar(content=ft.Text("配置已更新，重启后生效"), open=True)
+                    page.overlay.append(_sb)
+                    page.update()
 
             dialog._dialog.on_dismiss = _on_settings_close
             dialog.show()
@@ -215,4 +218,8 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    import os
+    if os.environ.get("FLET_FORCE_WEB_SERVER"):
+        ft.run(main, view=ft.AppView.FLET_APP_WEB, host="0.0.0.0", port=8765)
+    else:
+        ft.run(main)
