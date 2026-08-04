@@ -1,25 +1,27 @@
 """分类标签组件（占位）"""
 import flet as ft
+from src.gui.theme import Color, Radius, Font
 
 CATEGORY_COLORS = {
-    "审批类": ft.colors.BLUE,
-    "通知类": ft.colors.TEAL,
-    "会议类": ft.colors.PURPLE,
-    "协作类": ft.colors.ORANGE,
-    "资讯类": ft.colors.GREY,
-    "告警类": ft.colors.RED,
-    "营销类": ft.colors.PINK,
-    "垃圾邮件": ft.colors.GREY_400,
+    "审批类": Color.PRIMARY_500,
+    "通知类": Color.SUCCESS,
+    "会议类": Color.INFO,
+    "协作类": Color.WARNING,
+    "资讯类": Color.TEXT_SECONDARY,
+    "告警类": Color.ERROR,
+    "营销类": Color.IMPORTANT,
+    "垃圾邮件": Color.TEXT_PLACEHOLDER,
 }
+
 
 def create_category_badge(category: str | None) -> ft.Control:
     """创建分类标签"""
     if not category:
         return ft.Container(width=0)
-    color = CATEGORY_COLORS.get(category, ft.colors.GREY)
+    color = CATEGORY_COLORS.get(category, Color.TEXT_SECONDARY)
     return ft.Container(
-        content=ft.Text(category, size=11, color=ft.colors.WHITE),
+        content=ft.Text(category, size=Font.SMALL, color=Color.TEXT_ON_PRIMARY),
         bgcolor=color,
-        border_radius=4,
-        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+        border_radius=Radius.TAB,
+        padding=ft.Padding(6, 2, 6, 2),
     )
