@@ -517,24 +517,106 @@ class RuleEngine:
     def __init__(self, rules_file: Path)  # 加载 rules/custom_rules.yaml
     def reload() -> None
     def match(mail: MailData) -> RuleMatch | None:
-        """如果命中规则，返回 {category, priority, override_ai, auto_tags}，否则 None"""
+        """如果命中规则，返回 {category, priority, override_ai, auto_tags, matched_rule_name}, 否则 None"""
+    def match_all(mail: MailData) -> list[RuleMatch]:
+        """返回所有命中规则（按优先级排序），用于调试/测试"""
+    def test_rule(rule: dict, mail: MailData) -> tuple[bool, str]:
+        """测试单条规则是否命中，返回 (命中, 匹配说明)"""
 ```
-**支持的条件类型（MVP 精简版先实现前 4 个）：**
+
+**支持的条件类型（Alpha 实现 8 种）：**
 1. `sender == "ceo@company.com"` 精确匹配
 2. `sender_domain in ["monitor.system"]` 域名匹配
 3. `subject CONTAINS ["告警", "ALERT"]` 关键词包含
 4. `subject REGEX "周报|weekly"` 正则匹配
-5. `send_time IN "friday 17:00-23:59"` 时间窗口（可选延后）
+5. `body CONTAINS ["预算", "Q3"]` 正文关键词包含
+6. `has_attachment == true` 附件存在性
+7. `attachment_count > 0` 附件数量比较
+8. `recipient CONTAINS "group@company.com"` 收件人匹配
 
-内置默认规则（即使没有 custom_rules.yaml 也生效）：
+**条件组合：** 多个条件字段之间为 AND 关系（全部满足才命中）
+```yaml
+# 单条件
+condition: {subject_contains: ["告警", "ALERT"]}
+
+# 多条件 AND
+condition:
+  subject_contains: ["审批"]
+  sender_domain: ["company.com"]
+  has_attachment: true
+```
+
+**规则优先级与冲突解决：**
+```yaml
+rules:
+  - name: "CEO邮件优先"
+    enabled: true                    # 单条规则启停
+    priority: 100                    # 数值越大优先级越高，同优先级按文件顺序
+    condition:
+      sender: "ceo@company.com"
+    action:
+      set_type: "审批类"
+      set_priority: "紧急"
+      override_ai: true
+      auto_tag: ["VIP", "领导"]
+
+  - name: "监控告警识别"
+    enabled: true
+    priority: 90
+    condition:
+      subject_contains: ["告警", "ALERT", "CRITICAL"]
+      sender_domain: ["monitor.system"]
+    action:
+      set_type: "告警类"
+      set_priority: "紧急"
+      override_ai: true
+
+  - name: "审批关键词"
+    enabled: true
+    priority: 50
+    condition:
+      subject_contains: ["审批", "请批", "申请"]
+    action:
+      set_type: "审批类"
+      override_ai: false             # 不 override，给 AI 二次确认
+```
+
+**冲突解决策略：**
+- 多条规则命中时，取 `priority` 最高的规则结果
+- 同 priority 的多条命中 → 按文件中出现顺序，取第一条
+- `match()` 返回最高优先级结果；`match_all()` 返回全部命中（调试用）
+- 未声明 priority 的规则默认 priority=0
+
+**规则直接触发流程（可选）：**
+```yaml
+rules:
+  - name: "紧急告警直接处理"
+    enabled: true
+    priority: 100
+    condition:
+      subject_contains: ["P0", "严重故障"]
+    action:
+      set_type: "告警类"
+      set_priority: "紧急"
+      override_ai: true
+      run_workflow: "alert_handler"  # 直接触发指定流程，不等分类后自动匹配
+```
+- `run_workflow` 字段：规则命中后直接调用 `WorkflowEngine.run_workflow()` 执行指定流程
+- 与正常 `match_and_run` 的关系：`run_workflow` 先执行，`match_and_run` 仍会执行（可配置 `skip_auto_match: true` 跳过自动匹配）
+
+内置默认规则（即使没有 custom_rules.yaml 也生效，priority=0）：
 ```yaml
 rules:
   - name: "监控告警"
+    enabled: true
+    priority: 0
     condition: {subject_contains: ["告警", "ALERT", "CRITICAL"], sender_domain: "monitor.system"}
     action: {set_type: "告警类", set_priority: "紧急", override_ai: true}
   - name: "审批关键词"
+    enabled: true
+    priority: 0
     condition: {subject_contains: ["审批", "请批", "申请"]}
-    action: {set_type: "审批类", override_ai: false}  # 不 override，给 AI 二次确认
+    action: {set_type: "审批类", override_ai: false}
 ```
 
 #### A4.4 分类缓存管理器
@@ -680,6 +762,12 @@ def _check_quota() -> bool:
 
 **验收标准：**
 - [ ] 规则命中 + override_ai=True → 不调用 LLM，source="rule"
+- [ ] 多条规则命中 → priority 最高的规则胜出
+- [ ] 规则 enabled=false → 该规则不参与匹配
+- [ ] body CONTAINS 条件 → 正文包含关键词时命中
+- [ ] has_attachment=true 条件 → 有附件的邮件命中
+- [ ] 规则 run_workflow 字段 → 命中后直接触发指定流程
+- [ ] RuleEngine.test_rule() → 返回命中状态和匹配说明
 - [ ] classify_mode="rule_only" → 任何邮件都不调用 LLM，规则未命中的进入人工队列
 - [ ] classify_mode="ai_only" → 跳过规则分类，直接走 LLM（规则仅打标签）
 - [ ] classify_mode="manual" → 新邮件不自动分类，全部进入 pending_manual 队列
@@ -792,6 +880,7 @@ class BaseAction:
 | 11 | **http_request** | 调用外部 API | requests，支持 GET/POST/JSON body，超时 10s |
 | 12 | **set_variable** | 设置变量 | `ctx.set()` |
 | 13 | **log** | 记录日志 | `logger.log(level, message)` |
+| 14 | **execute_script** | 执行自定义脚本 | subprocess 运行 `script_path`，args 变量替换，超时 30s，输出 stdout/stderr |
 
 **每个 Action 的 on_error 策略实现（executor 层统一处理）：**
 - `skip` → 记 warn 日志 → continue
@@ -813,6 +902,15 @@ class WorkflowEngine:
         """
         匹配所有 enabled 且 trigger 条件满足的流程，逐一异步执行
         返回执行的 execution_id 列表
+
+        触发模式（trigger_mode，在 workflow YAML 中配置）:
+        - "all"（默认）: 所有匹配的流程都执行
+        - "first_match": 按流程 priority 降序，仅执行第一个匹配的流程
+        - "priority_order": 按 priority 降序顺序执行，前一个失败则不执行后续
+
+        流程优先级:
+        - workflow YAML 中 trigger.priority 字段（默认 0，数值越大越优先）
+        - first_match 模式下取 priority 最高的流程执行
         """
 
     def run_workflow(workflow_name: str,
@@ -859,6 +957,38 @@ class WorkflowEngine:
 2. **alert_handler.yaml**：告警类 + 紧急 → 立即通知告警群 + @all + HTTP 调用（可选调用内部告警接口）
 3. **default_handler.yaml**：所有邮件兜底 → 普通类汇总通知（可选），确保 match_and_run 不会完全空跑
 
+**流程触发配置示例（trigger 完整结构）：**
+```yaml
+# workflows/alert_handler.yaml
+version: "1.0"
+name: "告警邮件处理流程"
+enabled: true
+
+trigger:
+  mail_type: "告警类"            # 按分类匹配
+  priority: 90                   # 流程优先级（数值越大越优先）
+  match_mode: "all"              # all / first_match / priority_order
+  conditions:                    # 可选：额外过滤条件
+    - field: "classification.priority"
+      operator: "in"
+      value: ["紧急", "普通"]
+    - field: "mail.sender_domain"
+      operator: "not_in"
+      value: ["test.system"]     # 排除测试系统告警
+  # 也可以按邮件字段直接匹配（不依赖分类）
+  # mail_conditions:
+  #   - field: "subject"
+  #     operator: "contains"
+  #     value: ["P0", "严重故障"]
+```
+
+**match_mode 详解：**
+| 模式 | 说明 | 使用场景 |
+|------|------|---------|
+| `all`（默认） | 所有匹配的流程都执行 | 审批流程 + 记录流程同时跑 |
+| `first_match` | 按 priority 降序，仅执行第一个匹配的 | 告警有多个处理流程但只想跑最高优先级的 |
+| `priority_order` | 按 priority 降序顺序执行，前一个失败则不执行后续 | 串行依赖：先提取信息，成功后再通知 |
+
 **验收标准：**
 - [ ] `evaluate_condition("${mail.subject} CONTAINS '审批' AND ${classification.priority} == '紧急'")` 正确返回 bool
 - [ ] `${variables.x:-30}` 默认值语法正确解析
@@ -867,7 +997,11 @@ class WorkflowEngine:
 - [ ] on_error: abort → 中途失败 → execution 状态 failed，错误信息记录入库
 - [ ] 流程版本：v1.0/v1.1 并存，切换 current 不影响已保存的执行记录关联版本
 - [ ] 断点续传：模拟 step2 后崩溃 → 恢复后从 step3 开始，step1/step2 结果不重算
-- [ ] 单元测试：test_workflow_engine.py 覆盖条件解析、变量解析、各 Action mock、错误策略、分支跳转
+- [ ] match_mode=first_match：2 个流程都匹配 → 仅执行 priority 更高的
+- [ ] match_mode=priority_order：前一个失败 → 后续不执行
+- [ ] execute_script Action：执行测试脚本 → stdout 正确写入 ctx step output
+- [ ] 规则 run_workflow 字段：规则命中 → 直接触发指定流程
+- [ ] 单元测试：test_workflow_engine.py 覆盖条件解析、变量解析、各 Action mock、错误策略、分支跳转、触发模式
 
 ---
 
@@ -1204,6 +1338,40 @@ Temperature: [0.1]
 ─── 规则引擎 ────────────────────────────────────
   [x] 启用规则预筛    规则文件: ./rules/custom_rules.yaml [编辑] [重载]
 
+  规则列表:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ 启用  优先级  名称             条件              动作         │
+  │ [☑]   100    CEO邮件优先      sender==ceo...    审批/紧急     │
+  │ [☑]    90    监控告警识别      subject含告警...  告警/紧急     │
+  │ [☑]    50    审批关键词        subject含审批...  审批/override │
+  │ [☐]     0    周报自动归类      subject正则...    资讯/标签     │
+  │                                                               │
+  │ [测试规则]  [+ 新增]  [导入]                                   │
+  └──────────────────────────────────────────────────────────────┘
+
+  规则测试:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ 选择测试邮件: [从收件箱选择 ▾]  或手动输入:                   │
+  │   发件人: [____________________________]                      │
+  │   主题:   [____________________________]                      │
+  │   正文:   [____________________________]                      │
+  │   附件:   [☐ 有附件]  数量: [0]                               │
+  │                                                               │
+  │ [运行测试]                                                    │
+  │                                                               │
+  │ 测试结果:                                                     │
+  │ ✅ 命中规则: "CEO邮件优先" (priority=100)                     │
+  │    分类: 审批类  优先级: 紧急  override_ai: true             │
+  │    标签: VIP, 领导                                            │
+  │ ❌ 未命中: "监控告警识别" - subject 不包含 [告警/ALERT/CRITICAL]│
+  │ ❌ 未命中: "审批关键词" - 被 priority=100 规则覆盖            │
+  └──────────────────────────────────────────────────────────────┘
+```
+- 规则列表中每行可单独启停（checkbox）、编辑（点击行）、删除
+- [测试规则] 按钮 → 弹出测试面板，可选已有邮件或手动输入邮件字段 → 运行 `RuleEngine.match_all()` → 显示所有规则的命中/未命中详情
+- 测试结果包含未命中原因（如"subject 不包含关键词"），方便用户调试规则
+- [编辑] 按钮 → 弹出 YAML 编辑器（Alpha 不实现可视化表单编辑器，Beta 再做）
+
 ─── 反馈学习 ────────────────────────────────────
   [x] 自动更新规则引擎    反馈数据目录: ./data/feedback/
 
@@ -1311,6 +1479,8 @@ Temperature: [0.1]
 - [ ] AI 设置页配额设为 50，今日已用 50 → 状态栏显示"AI 配额已用完"
 - [ ] 邮件详情"重新分类"下拉菜单 → 三种模式可选，结果正确更新
 - [ ] 邮件详情 AISummaryCard 显示分类来源（AI/规则/缓存/人工）
+- [ ] AI 设置页规则列表 → 可单条启停、编辑、删除
+- [ ] AI 设置页规则测试 → 选邮件或手动输入 → 显示命中/未命中详情和原因
 - [ ] 流程管理页 YAML 语法检查：${未定义变量引用} / 未定义 action 名称 → 红色错误提示
 - [ ] 模板渲染预览：选择测试邮件 → 显示渲染后的最终 markdown 纯文本预览
 - [ ] 统计面板数字与实际数据库查询一致
