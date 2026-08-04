@@ -25,7 +25,9 @@ email-helper/
 ├── templates/                   # 【新增】通知模板目录
 │   ├── approval_notification.yaml
 │   ├── alert_notification.yaml
-│   └── daily_summary.yaml
+│   ├── daily_summary.yaml
+│   └── email_templates/         # 【新增】邮件发送模板目录
+│       └── approval_reply.yaml
 │
 ├── rules/                       # 【新增】自定义规则目录
 │   └── custom_rules.yaml
@@ -63,6 +65,9 @@ email-helper/
 │   │   └── recovery/            # 【新增】容错恢复模块
 │   │       ├── __init__.py
 │   │       └── task_recover.py      # 任务恢复管理器
+│   │   ├── config_watcher.py       # 【新增】配置文件热重载
+│   │   └── storage/
+│   │       └── cleanup_manager.py  # 【新增】数据清理管理器
 │   │
 │   ├── ai/                      # 【新增】AI 分类引擎
 │   │   ├── __init__.py
@@ -110,21 +115,26 @@ email-helper/
 │   │   └── failure_queue.py         # 失败通知持久化队列
 │   │
 │   ├── mail/
-│   │   ├── scheduler.py         # 需扩展：拉取后自动触发分类+流程
+│   │   ├── scheduler.py         # 需扩展：拉取后自动触发分类+流程；Cron/工作时间过滤
+│   │   ├── parser.py            # 需扩展：chardet检测 + In-Reply-To/References提取
+│   │   ├── send_template.py     # 【新增】邮件发送模板
 │   │   └── ...                  # 其他保持不变
 │   │
 │   ├── storage/
 │   │   └── mail_store.py        # 需重构：元数据走 SQLite，正文走 JSON
 │   │
 │   └── gui/
-│       ├── main_window.py       # 需扩展：新增 AI配置/流程/模板/统计 入口
-│       ├── worker.py            # 需扩展：AI分类Worker / 流程执行Worker
+│       ├── main_window.py       # 需扩展：新增 7 个页面入口 + 已发送视图
+│       ├── compose_dialog.py    # 【新增】写邮件对话框
+│       ├── worker.py            # 需扩展：AI分类/流程执行/邮件发送 Worker
 │       ├── pages/               # 【新增】独立页面组件
 │       │   ├── __init__.py
 │       │   ├── ai_config_page.py     # AI 配置页面
 │       │   ├── workflow_page.py      # 流程管理页面
 │       │   ├── template_page.py      # 模板管理页面
 │       │   ├── notification_page.py  # 通知配置页面
+│       │   ├── schedule_page.py      # 【新增】调度配置页面
+│       │   ├── log_page.py           # 【新增】运行日志页面
 │       │   └── stats_page.py         # 统计面板页面
 │       └── components/          # 【新增】可复用 GUI 组件
 │           ├── __init__.py
@@ -138,7 +148,12 @@ email-helper/
     ├── test_notification.py    # 【新增】通知引擎测试
     ├── test_database.py        # 【新增】SQLite 存储测试
     ├── test_security.py        # 【新增】安全模块测试
-    └── test_migration.py       # 【新增】数据迁移测试
+    ├── test_migration.py       # 【新增】数据迁移测试
+    ├── test_compose_dialog.py  # 【新增】写邮件测试
+    ├── test_scheduler_cron.py  # 【新增】调度增强测试
+    ├── test_cleanup.py         # 【新增】数据清理测试
+    ├── test_attachment.py      # 【新增】附件处理测试
+    └── test_config_watcher.py  # 【新增】配置热重载测试
 ```
 
 ---
@@ -171,17 +186,26 @@ main.py
   │     ├── notification/channels/*         (企微渠道)
   │     ├── notification/template.py        (模板渲染)
   │     ├── notification/rate_limiter.py    (限流)
-  │     ├── notification/queue.py           (队列+聚合)
+  │     ├── notification/queue.py           (队列+聚合+免打扰)
   │     ├── notification/retry_handler.py   (重试)
   │     └── notification/failure_queue.py   (失败队列)
   │
   ├── core/recovery/task_recover.py         (启动任务恢复)
+  ├── core/config_watcher.py                (配置热重载)
+  ├── core/storage/cleanup_manager.py       (数据清理)
+  │
+  ├── mail/scheduler.py                     (调度增强: Cron/工作时间)
+  ├── mail/parser.py                        (解析增强: chardet/线程头)
+  ├── mail/send_template.py                 (邮件发送模板)
   │
   └── gui/main_window.py
+        ├── gui/compose_dialog.py            (写邮件对话框)
         ├── gui/pages/ai_config_page.py     (AI 配置页)
         ├── gui/pages/workflow_page.py      (流程管理页)
         ├── gui/pages/template_page.py      (模板管理页)
         ├── gui/pages/notification_page.py  (通知配置页)
+        ├── gui/pages/schedule_page.py      (调度配置页)
+        ├── gui/pages/log_page.py           (运行日志页)
         └── gui/pages/stats_page.py         (统计面板)
 ```
 
@@ -279,6 +303,26 @@ class ExecutionRepository:
     def list_recent(days: int = 7) -> list[dict]           # 统计面板用
     def count_by_workflow(days: int = 7) -> dict[str, dict] # 每个流程的成功/失败数
 ```
+
+#### A1.5.1 多级去重补充
+在 `CacheRepository` 中补充内容指纹去重和线程去重（design.md 4.5.4）：
+```python
+# 内容指纹去重（辅助）
+def get_content_fingerprint(subject: str, sender: str, send_date: str) -> str:
+    """生成内容指纹: md5(subject + sender + send_date.date())"""
+    return hashlib.md5(f"{subject}|{sender}|{send_date}".encode()).hexdigest()
+
+def is_duplicate_by_fingerprint(fp: str, lookback_days: int = 7) -> bool
+def mark_fingerprint(fp: str) -> None
+
+# 线程去重（基于 In-Reply-To / References）
+def get_thread_id(in_reply_to: str | None, references: str | None) -> str | None
+def is_thread_seen(thread_id: str) -> bool
+def mark_thread_seen(thread_id: str) -> None
+```
+- 需在 `mails` 表增加 `content_fingerprint TEXT` 和 `thread_id TEXT` 字段
+- `parse_email()` 需提取 `In-Reply-To` 和 `References` 邮件头
+- 线程去重缓存保留 90 天，定期清理
 
 #### A1.6 MailStore 重构（兼容模式）
 修改 `src/storage/mail_store.py`，读写逻辑改为：
@@ -836,7 +880,28 @@ class NotificationQueue:
 - **失败后**：写入 `failed_notifications` SQLite 表（含 next_retry_at）
 - **后台重试线程**：每 30 分钟扫描一次 `failure_queue.get_retryable()`，过期（24h）自动放弃并记 ERROR 日志
 
-#### A6.6 通知分发主引擎
+#### A6.6 免打扰时段（DND）
+在 `NotificationEngine` 中实现：
+```python
+def _check_dnd(now: datetime) -> bool:
+    """检查当前是否在免打扰时段"""
+    dnd_start = config.get("notification.dnd_start", "22:00")
+    dnd_end = config.get("notification.dnd_end", "08:00")
+    # 跨天逻辑：22:00-08:00 → 当前时间 >= 22:00 或 < 08:00
+```
+- 紧急邮件（priority="紧急"）：**忽略 DND，立即发送** + @all
+- 普通/低优先级邮件：进入 DND 延迟队列，次日 08:00 统一发送汇总
+- DND 配置项加入 `notification_channels.yaml`：
+  ```yaml
+  dnd:
+    enabled: true
+    start: "22:00"
+    end: "08:00"
+    bypass_for_urgent: true
+  ```
+- DND 延迟队列复用 `NotificationQueue`，标记 `deferred_until: 次日08:00`
+
+#### A6.7 通知分发主引擎
 实现 `src/notification/engine.py`：
 ```python
 class NotificationEngine:
@@ -872,7 +937,8 @@ class NotificationEngine:
 - [ ] 频率限制 45009：mock 返回 → 触发 60 秒等待后重试
 - [ ] 失败持久化：模拟 3 次重试都失败 → 写入 failed_notifications 表，下次扫描可取出
 - [ ] 禁用 `低优先级` 路由（空列表）→ 资讯类邮件不发通知，正确返回
-- [ ] 单元测试：test_notification.py 覆盖令牌桶线程安全、冷却逻辑、聚合、重试、错误分类
+- [ ] 免打扰时段 22:00-08:00 发送通知 → 延迟到次日 08:00 发送（日志记录延迟原因）
+- [ ] 单元测试：test_notification.py 覆盖令牌桶线程安全、冷却逻辑、聚合、重试、错误分类、免打扰延迟
 
 ---
 
@@ -940,8 +1006,11 @@ class TaskRecovery:
 - **分类标签**（`CategoryBadge` 组件）：📋审批 蓝底白字 / ⚠️告警 红底 / 📰资讯 绿底 / ...
 - **置信度指示**：>=0.9 绿色圆点 / 0.7-0.9 蓝点 / 0.5-0.7 黄点 "待确认" / <0.5 红边框
 - **优先级标识**：紧急邮件 🔥 emoji 前缀
+- **标签展示**：邮件 tags 字段以小标签形式显示（如 "周报"、"VIP"），来自规则自动打标或手动添加
 - **筛选下拉框**（列表标题栏右侧）：全部 / 待确认 / 审批类 / 告警类 / ...
+- **搜索框**（列表标题栏右侧）：支持按主题、发件人、正文关键词搜索（查 SQLite `WHERE subject LIKE OR sender LIKE`），实时过滤
 - **人工确认入口**：右键菜单 "修正分类" → 弹对话框选择正确分类 + 可选原因 → 写入 `FeedbackManager.record_feedback()`
+- **手动打标签**：右键菜单 "添加标签" → 输入标签名 → 更新 mails 表 tags 字段
 
 #### A8.2 邮件详情增强
 修改 `src/gui/mail_detail.py`，在正文上方增加：
@@ -962,9 +1031,18 @@ class TaskRecovery:
   └─────────────────────────────────────────────────────────┘
   ```
 - **流程执行详情按钮** → 弹出对话框显示步骤列表：step1 ✅ extract_info → step2 ✅ check_duplicate → step3 ➡️ 金额分支(>10万) → step4_high ✅ notify...
+- **操作按钮功能实现**（当前 MVP 中 4 个按钮无 on_click 事件，需全部接入）：
+  - [回复] → 打开写邮件对话框（见任务 A10），预填收件人 = 原发件人，主题 = "Re: " + 原主题，正文引用原邮件
+  - [转发] → 打开写邮件对话框，主题 = "Fwd: " + 原主题，正文附带原邮件全文
+  - [标记已读/未读] → 调用 `ImapClient.mark_as_read()` + 更新 mails 表 `is_read` 字段 + 列表刷新
+  - [删除] → 确认对话框 → 标记 mails 表 `status='archived'`（不物理删除）+ 列表移除
+- **HTML 正文渲染修正**（当前直接把 `body_html` 塞给 `ft.Markdown` 导致标签显示为明文）：
+  - 有 `body_html` 时：使用 `ft.Markdown` 先做 HTML→Markdown 转换（或用 `ft.Container` + `ft.Text` selectable 模式显示纯文本 fallback）
+  - 仅 `body_text` 时：直接 `ft.Markdown` 渲染
+  - 提供"切换 HTML/纯文本"按钮供用户选择渲染模式
 
 #### A8.3 新增页面（侧栏扩展）
-修改 `src/gui/main_window.py`，侧栏在原有 5 个分类下，增加分割线 + 5 个新入口：
+修改 `src/gui/main_window.py`，侧栏在原有 5 个分类下，增加分割线 + 7 个新入口：
 ```
 ─── 分割线 ───
 📊 统计面板
@@ -972,8 +1050,12 @@ class TaskRecovery:
 ⚙️ 流程管理
 📝 模板管理
 📢 通知配置
+⏰ 调度配置
+📜 运行日志
 ```
 点击 → 中间区域（邮件列表+详情位置整体替换）显示对应独立页面。
+
+**已发送邮件视图**：侧栏"📤 已发送"点击后，邮件列表切换为查询 `mails` 表 `is_sent=1` 的记录，复用同一列表组件。
 
 #### A8.4 统计面板页面（stats_page.py）
 卡片式布局：
@@ -1076,12 +1158,22 @@ LLM 后端:
 
 **验收标准：**
 - [ ] 邮件列表分类标签颜色正确，置信度圆点与数据一致
+- [ ] 邮件列表搜索框输入关键词 → 实时过滤显示匹配邮件
+- [ ] 邮件列表标签展示正确，手动添加标签后列表即时刷新
 - [ ] 右键修正分类 → 反馈数据写入 feedback/*.jsonl
+- [ ] 邮件详情回复按钮 → 打开写邮件对话框，收件人/主题预填正确
+- [ ] 邮件详情转发按钮 → 打开写邮件对话框，正文附带原邮件
+- [ ] 邮件详情标记已读 → IMAP 标记 + 列表未读圆点消失
+- [ ] 邮件详情删除 → 确认后归档，列表移除
+- [ ] HTML 邮件正文渲染正确，不显示原始 HTML 标签
+- [ ] 已发送视图 → 显示已发送邮件列表
 - [ ] AI 设置切换 Provider → 保存后 ai.json 字段正确，密码走 secrets.enc
 - [ ] 流程管理页 YAML 语法检查：${未定义变量引用} / 未定义 action 名称 → 红色错误提示
 - [ ] 模板渲染预览：选择测试邮件 → 显示渲染后的最终 markdown 纯文本预览
 - [ ] 统计面板数字与实际数据库查询一致
 - [ ] 通知配置保存后 notification_channels.yaml 写入正确，Webhook 密钥走 secrets.enc 不存明文
+- [ ] 调度配置页面保存后 → 调度器实际按新规则运行
+- [ ] 运行日志页面 → 实时显示最新日志，可按级别过滤
 
 ---
 
@@ -1123,6 +1215,7 @@ LLM 后端:
 PyYAML>=6.0
 requests>=2.31.0
 cryptography>=41.0.0
+chardet>=5.0.0
 # 可选：keyring>=24.0.0 (macOS/Windows 系统密钥链优化)
 ```
 
@@ -1138,12 +1231,379 @@ cryptography>=41.0.0
 
 ---
 
+### 任务 A10：邮件撰写与发送功能
+
+**目标：** 实现 MVP 中缺失的"写邮件"功能，包括新建邮件、回复、转发，支持纯文本/HTML 正文、附件、发送模板。
+
+**具体工作：**
+
+#### A10.1 写邮件对话框
+实现 `src/gui/compose_dialog.py`：
+```python
+class ComposeDialog:
+    """邮件撰写对话框"""
+    def __init__(self, page: ft.Page, smtp_client: SmtpClient,
+                 mail_store: MailStore, mode: str = "new",
+                 reply_to: MailData | None = None,
+                 forward_from: MailData | None = None)
+    # mode: "new" / "reply" / "forward"
+```
+**表单字段：**
+- 收件人（支持多个，逗号分隔）
+- 抄送（可折叠展开）
+- 主题（reply 模式自动 "Re: "，forward 模式自动 "Fwd: "）
+- 正文编辑区（`ft.TextField` multiline，支持纯文本编辑）
+- 附件区（拖拽/点击上传，显示文件名+大小，可删除）
+- [发送] [存草稿] [取消] 按钮
+
+**回复/转发预填逻辑：**
+- Reply: 收件人 = 原邮件发件人，正文末尾追加 `\n\n--- 原邮件 ---\n发件人: xxx\n主题: xxx\n时间: xxx\n\n{原正文}`
+- Forward: 收件人为空，正文追加原邮件全文 + 附件自动附带
+
+#### A10.2 发送模板（邮件发送用）
+实现 `src/mail/send_template.py`，加载 `templates/email_templates/*.yaml`：
+```yaml
+# templates/email_templates/approval_reply.yaml
+name: "审批回复模板"
+subject: "Re: {{original_subject}}"
+body: |
+  您好，
+
+  关于{{original_subject}}，已处理完毕。
+
+  此致
+  敬礼
+attachments: []
+```
+- 与通知模板（notification templates）是两套独立体系
+- 写邮件对话框中可选模板 → 变量替换后填入正文
+
+#### A10.3 发送流程
+1. 用户点 [发送] → 校验收件人格式
+2. 构建 MIME 邮件（复用 `SmtpClient.send_mail()`）
+3. 后台 `MailSendWorker` 线程发送（不阻塞 UI）
+4. 发送成功 → 邮件元数据存入 `mails` 表（`is_sent=True`）→ SnackBar 提示成功
+5. 发送失败 → SnackBar 显示错误 + 对话框不关闭（允许修改后重试）
+
+#### A10.4 集成到主界面
+- [main_window.py](file:////workspace/src/gui/main_window.py) 的"写邮件"按钮 `on_click` → 打开 `ComposeDialog(mode="new")`
+- [mail_detail.py](file:///workspace/src/gui/mail_detail.py) 的回复/转发按钮 → 打开 `ComposeDialog(mode="reply/forward")`
+- 发送 Worker 结果回调 → 更新 GUI
+
+**验收标准：**
+- [ ] 新建邮件：填写收件人/主题/正文 → 发送成功 → "已发送"列表可见
+- [ ] 回复邮件：自动预填收件人和主题，正文引用原邮件
+- [ ] 转发邮件：自动附带原附件
+- [ ] 带附件发送：附件正确送达
+- [ ] 发送失败：SnackBar 显示错误，对话框保留内容可重试
+- [ ] 发送时不阻塞 UI（Worker 线程）
+
+---
+
+### 任务 A11：调度增强 + 调度配置页面
+
+**目标：** 调度器从单一 IntervalTrigger 升级为支持 Cron 表达式 + 工作时间过滤，GUI 提供可视化配置页面。
+
+**具体工作：**
+
+#### A11.1 调度器增强
+修改 [scheduler.py](file:///workspace/src/mail/scheduler.py)：
+```python
+class MailScheduler:
+    def __init__(self, ...,
+                 trigger_mode: str = "interval",  # "interval" / "cron" / "mixed"
+                 cron_expression: str | None = None,  # "0 */2 * * 1-5" = 工作日每2小时
+                 work_hours_only: bool = False,
+                 work_hours: dict = {"start": "08:30", "end": "18:30"},
+                 work_days: list[int] = [1,2,3,4,5])  # 1=周一
+
+    def start(self):
+        if self.trigger_mode == "cron":
+            trigger = CronTrigger.from_crontab(self.cron_expression)
+        elif self.trigger_mode == "interval":
+            trigger = IntervalTrigger(minutes=self.interval_minutes)
+        # work_hours_only 过滤：在 trigger 上叠加 hour/day_of_week 限制
+        if self.work_hours_only:
+            trigger = CronTrigger(
+                hour=f"{start_hour}-{end_hour}",
+                day_of_week="mon-fri"
+            )
+```
+- [config.py](file:///workspace/src/core/config.py) 已有 `work_hours` 和 `work_days` 字段，但当前从未使用 → 需接入
+- 新增配置项 `schedule.trigger_mode` 和 `schedule.cron_expression`
+
+#### A11.2 调度配置页面（schedule_page.py）
+```
+拉取模式: [定时间隔 ▾]    定时间隔 / Cron 表达式 / 混合模式
+
+定时间隔模式:
+  每隔 [5] 分钟拉取一次
+
+Cron 模式:
+  Cron 表达式: [0 */2 * * 1-5]
+  说明: 秒 分 时 日 月 周
+  [ human-readable 预览: "工作日每2小时整点" ]
+
+工作时间过滤:
+  [x] 仅在工作时间拉取
+  工作日: [☑一][☑二][☑三][☑四][☑五][☐六][☐日]
+  工作时间: [08:30] 至 [18:30]
+
+失败重试:
+  [x] 拉取失败后自动重试
+  重试间隔: [1] 分钟
+
+[保存] [立即拉取一次] [停止调度]
+```
+
+#### A11.3 下次拉取时间计算
+- 状态栏"下次: HH:mm" → 从 `scheduler.get_next_run_time()` 获取
+- Cron 模式下正确显示下一次触发时间
+
+**验收标准：**
+- [ ] 间隔模式：每 5 分钟拉取 → 下次时间显示正确
+- [ ] Cron 模式：`0 9 * * 1-5` → 仅工作日 9:00 拉取
+- [ ] 工作时间过滤：非工作时间段不触发拉取
+- [ ] 页面保存后 → 调度器实际按新规则运行
+- [ ] "立即拉取一次"按钮 → 手动触发不影响定时计划
+- [ ] "停止调度"按钮 → 停止后状态栏显示"调度已停止"
+
+---
+
+### 任务 A12：数据清理策略
+
+**目标：** 按 design.md 4.5.6 定时清理过期数据，避免磁盘膨胀。
+
+**具体工作：**
+
+#### A12.1 清理任务管理器
+实现 `src/core/storage/cleanup_manager.py`：
+```python
+class CleanupManager:
+    def __init__(self, db: Database, data_dir: Path, config: dict)
+    def run_cleanup(self) -> dict:
+        """执行清理，返回 {mails_cleaned: N, attachments_cleaned: N, ...}"""
+    def schedule_daily(self, scheduler: BackgroundScheduler):
+        """注册每日 03:00 的清理 Cron 任务"""
+```
+
+#### A12.2 清理规则
+| 数据类型 | 保留期限 | 清理方式 |
+|----------|----------|----------|
+| 邮件正文 JSON | 30 天 | 删除文件 + SQLite 记录标记 `status='archived'` |
+| 附件文件 | 7 天（可配置） | 删除文件，保留元信息 |
+| 处理记录 | 90 天 | SQLite DELETE |
+| 日志文件 | 30 天 | 删除旧轮转文件 |
+| 去重缓存（近期） | 30 天 | SQLite DELETE |
+| 分类缓存 | TTL 24h | SQLite DELETE（已过期） |
+| 失败通知队列 | 24h 后放弃 | SQLite DELETE |
+
+#### A12.3 配置项
+在 `config/app.json` 增加：
+```json
+{
+  "cleanup": {
+    "enabled": true,
+    "schedule_cron": "0 3 * * *",
+    "mail_retention_days": 30,
+    "attachment_retention_days": 7,
+    "record_retention_days": 90,
+    "log_retention_days": 30
+  }
+}
+```
+
+#### A12.4 清理日志
+- 清理前记录各类型条数
+- 清理后记录释放空间大小
+- 清理结果写入运行日志（INFO 级别）
+
+**验收标准：**
+- [ ] 手动触发清理 → 30 天前的邮件正文文件被删除，SQLite 记录标记 archived
+- [ ] 7 天前的附件文件被删除
+- [ ] 清理后日志显示 "清理完成：邮件 15 封，附件 8 个，释放空间 125MB"
+- [ ] 每日 03:00 自动执行（Cron 任务注册成功）
+- [ ] 清理过程中不影响正常邮件拉取/分类/流程
+
+---
+
+### 任务 A13：附件处理策略升级 + 解析器增强
+
+**目标：** 按 design.md 4.1.4 实现附件大小分级下载、危险类型拦截、规范化存储；按 4.1.5 引入 chardet 自动字符集检测。
+
+**具体工作：**
+
+#### A13.1 附件下载与存储
+修改 [parser.py](file:///workspace/src/mail/parser.py) 的 `extract_attachments()` 和 [imap_client.py](file:////workspace/src/mail/imap_client.py) 的邮件拉取流程：
+
+**大小分级策略（design.md 4.1.4）：**
+| 大小 | 策略 |
+|------|------|
+| < 5MB | 自动下载，保存到本地 |
+| 5-50MB | 仅记录元信息，按需下载（GUI 提供"下载"按钮） |
+| > 50MB | 警告提示，需用户确认 |
+| > 200MB | 拒绝下载，仅记录元信息 |
+
+**存储规则：**
+- 目录：`data/attachments/2026-08/`（按年月）
+- 文件名：`{日期}_{发件人}_{原文件名}`，同名追加序号
+- 危险扩展名拦截：`.exe / .bat / .scr / .cmd / .ps1` → 不下载，标记 `blocked=True`
+
+**附件配置（加入 app.json）：**
+```json
+{
+  "attachment": {
+    "auto_download_max_size": 5242880,
+    "manual_download_max_size": 52428800,
+    "blocked_extensions": [".exe", ".bat", ".scr", ".cmd", ".ps1"],
+    "storage_path": "./data/attachments/",
+    "cleanup_days": 7
+  }
+}
+```
+
+#### A13.2 chardet 字符集自动检测
+修改 [parser.py](file:///workspace/src/mail/parser.py) 的 `decode_payload()`：
+```python
+import chardet
+
+def decode_payload(part: Message) -> str:
+    payload = part.get_payload(decode=True)
+    if payload is None:
+        return ""
+    charset = part.get_content_charset()
+    if charset:
+        try:
+            return payload.decode(charset)
+        except (UnicodeDecodeError, LookupError):
+            pass
+    # chardet 自动检测
+    detected = chardet.detect(payload)
+    if detected['confidence'] > 0.8:
+        try:
+            return payload.decode(detected['encoding'])
+        except (UnicodeDecodeError, LookupError):
+            pass
+    # 最终回退
+    for enc in CHARSET_FALLBACK:
+        try:
+            return payload.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return payload.decode("utf-8", errors="replace")
+```
+
+#### A13.3 In-Reply-To / References 提取
+修改 `parse_email()`，提取邮件头中的线程关联字段：
+```python
+in_reply_to = msg.get("In-Reply-To", "")
+references = msg.get("References", "")
+```
+存入 `MailData` 新增字段 `in_reply_to: str | None` 和 `references: str | None`，供 A1.5.1 线程去重使用。
+
+#### A13.4 GUI 附件交互
+修改 [mail_detail.py](file:///workspace/src/gui/mail_detail.py) 附件区域：
+- 已下载附件：显示 [打开] [在文件夹中显示] 按钮
+- 未下载附件（5-50MB）：显示 [下载] 按钮
+- 被拦截附件：显示 ⚠️ "已拦截危险文件类型"
+- 超大附件（>50MB）：显示 [确认下载] 按钮 + 警告
+
+**验收标准：**
+- [ ] 3MB 附件 → 自动下载到 `data/attachments/2026-08/` 目录
+- [ ] 10MB 附件 → 仅显示元信息，点"下载"后保存
+- [ ] `.exe` 附件 → 标记拦截，不下载，GUI 显示警告
+- [ ] chardet 检测：构造 GBK 编码但未声明 charset 的邮件 → 正确解码
+- [ ] In-Reply-To 和 References 字段正确提取到 MailData
+- [ ] 附件文件名包含发件人和日期前缀，同名文件自动追加序号
+
+---
+
+### 任务 A14：运行日志页面 + 配置热重载
+
+**目标：** GUI 提供实时日志查看页面；配置文件修改后引擎自动感知重载。
+
+**具体工作：**
+
+#### A14.1 运行日志页面（log_page.py）
+实现 `src/gui/pages/log_page.py`：
+```
+┌─ 运行日志 ──────────────────────────────────────────────────┐
+│ 级别: [全部 ▾]  模块: [全部 ▾]  搜索: [___________]  [暂停] │
+│──────────────────────────────────────────────────────────────│
+│ 2026-08-03 10:30:15 | INFO  | mail.imap       | 连接成功     │
+│ 2026-08-03 10:30:16 | INFO  | mail.imap       | 发现 3 封... │
+│ 2026-08-03 10:30:18 | DEBUG | ai.classifier   | 规则未命中... │
+│ 2026-08-03 10:30:20 | INFO  | workflow.engine | 执行审批流程  │
+│ 2026-08-03 10:30:22 | ERROR | notification    | Webhook 超时  │
+│ ...                                                          │
+│                                                              │
+│ [清空显示] [导出日志]              自动滚动: [☑]            │
+└──────────────────────────────────────────────────────────────┘
+```
+**实现方式：**
+- 自定义 `logging.Handler` 子类 `MemoryLogHandler`：缓存最近 1000 条日志到内存 deque
+- 日志页面定时（每 2 秒）从 `MemoryLogHandler` 拉取新日志 → 追加到 `ft.ListView`
+- 级别/模块过滤：前端过滤，不重新读文件
+- 搜索：前端全文匹配
+- 自动滚动：新日志到达时自动滚动到底部（可暂停）
+- 历史日志：[加载更多] 按钮 → 从 `logs/app.log` 文件读取更早的日志
+
+#### A14.2 配置热重载
+实现 `src/core/config_watcher.py`：
+```python
+class ConfigWatcher:
+    """监听配置文件变化，触发对应引擎重载"""
+    def __init__(self):
+        self._watchers = {}  # path -> (callback, last_mtime)
+
+    def watch(self, path: Path, callback: Callable):
+        """注册文件监听"""
+        self._watchers[path] = (callback, path.stat().st_mtime)
+
+    def check_all(self):
+        """定时检查所有监听文件是否变化（每 5 秒由调度器触发）"""
+        for path, (callback, last_mtime) in self._watchers.items():
+            if not path.exists():
+                continue
+            current_mtime = path.stat().st_mtime
+            if current_mtime != last_mtime:
+                logger.info(f"配置文件已变更: {path}")
+                try:
+                    callback()
+                except Exception as e:
+                    logger.error(f"重载配置失败: {path}: {e}")
+                self._watchers[path] = (callback, current_mtime)
+```
+**注册的监听项：**
+| 文件 | 回调 |
+|------|------|
+| `rules/custom_rules.yaml` | `rule_engine.reload()` |
+| `workflows/*/current/workflow.yaml` | `workflow_loader.reload_current()` |
+| `templates/*.yaml` | `template_engine.reload()` |
+| `config/ai.json` | `classifier.reload_config()` |
+| `config/notification_channels.yaml` | `notification_engine.reload_config()` |
+
+- 使用 mtime 轮询而非 watchdog/inotify，避免额外依赖
+- 每 5 秒检查一次（注册到 APScheduler 的 interval trigger）
+- 重载失败 → 记录 ERROR 日志 + SnackBar 提示，继续使用旧配置
+
+**验收标准：**
+- [ ] 日志页面实时显示新产生的日志（延迟 < 3 秒）
+- [ ] 级别过滤：选 "ERROR" → 仅显示错误日志
+- [ ] 搜索 "IMAP" → 仅显示包含 IMAP 的日志行
+- [ ] 暂停按钮 → 新日志不自动追加，恢复后继续
+- [ ] 修改 `rules/custom_rules.yaml` → 5 秒内规则引擎自动重载（日志记录 "规则已重载"）
+- [ ] 修改 `config/ai.json` → 分类器重载配置，新阈值立即生效
+- [ ] 修改 workflow YAML → 流程引擎重载，下次执行使用新版本
+
+---
+
 ## 开发顺序与依赖
 
 ```
-A1 (SQLite存储)
-   ├── A2 (安全/密钥)       并行开发
-   └── A3 (数据迁移框架)
+A1 (SQLite存储)  ──┐
+A2 (安全/密钥)    ├── 并行开发
+A3 (数据迁移框架) ─┘        A13 (附件+解析器增强) ← 可与第1批并行
           │
           ▼
 A1+A2+A3 验收通过
@@ -1159,7 +1619,10 @@ A6 (通知引擎)   ─────────┘
 A7 (容错恢复) （依赖 A4/A5/A6 引擎 API）
           │
           ▼
-A8 (GUI增强)
+A8 (GUI增强) ─── A10 (写邮件) ─── A11 (调度增强) ── 并行
+          │
+          ▼
+A12 (数据清理)   A14 (日志页+热重载) ← 也可与 A8 并行
           │
           ▼
 A9 (集成联调)
@@ -1169,10 +1632,11 @@ A9 (集成联调)
 
 | 批次 | 任务 | 预计工作量 | 依赖 |
 |------|------|-----------|------|
-| 第1批 | A1 + A2 + A3 | 基础设施 | 无，可独立开发与测试 |
+| 第1批 | A1 + A2 + A3 + A13 | 基础设施 + 解析器增强 | 无，可独立开发与测试 |
 | 第2批 | A4 + A5 + A6 | 三大核心引擎 | 依赖 A1（存储）/A2（密钥）/A3（迁移已跑） |
-| 第3批 | A7 + A8 | 容错 + GUI | 依赖 A4+A5+A6 的引擎接口定义稳定 |
-| 第4批 | A9 | 集成联调 | 全部 |
+| 第3批 | A7 + A8 + A10 + A11 | 容错 + GUI + 写邮件 + 调度 | 依赖 A4+A5+A6 的引擎接口定义稳定 |
+| 第4批 | A12 + A14 | 数据清理 + 日志/热重载 | 依赖 A8 GUI 框架就绪 |
+| 第5批 | A9 | 集成联调 | 全部 |
 
 ---
 
@@ -1183,10 +1647,12 @@ A9 (集成联调)
 | 多账户支持 | 工作量大，需重构 UI 多处 | Beta |
 | IMAP IDLE 实时推送 | 需长连接管理+重连策略 | Beta |
 | DPAPI/Keychain 原生密钥封装加密 | Alpha 用 PBKDF 机器特征派生方案 | Beta |
-| 邮件线程（会话）聚合展示 | 邮件头 References 解析 + 前端 UI | Beta |
+| 邮件线程（会话）聚合展示 | Alpha 已实现线程去重（In-Reply-To），但 UI 会话视图留给 Beta | Beta |
 | 批量操作（批量标记已读/删除）| GUI 交互 | Beta |
-| 自定义规则 GUI 编辑器 | Alpha 仅 YAML 编辑 | Beta |
+| 自定义规则 GUI 编辑器 | Alpha 仅 YAML 编辑 + 热重载 | Beta |
 | 飞书/钉钉等更多通知渠道 | Alpha 仅企微 Webhook | 按需 |
+| AI 回复建议生成 | design 6.7 提及，Alpha 仅实现摘要和分类 | Beta |
+| 邮件富文本编辑器 | Alpha 写邮件仅纯文本编辑 | Beta |
 | 插件系统 (自定义 Action/Classifier/Notifier) | 架构预留，代码不实现 | 远期 |
 | EML/PDF 导出 | 低优先级 | 按需 |
 
@@ -1195,7 +1661,7 @@ A9 (集成联调)
 ## 技术约束（Alpha 阶段）
 
 - Python 3.10+
-- 新增第三方库：`PyYAML`, `requests`, `cryptography`（`keyring` 可选）
+- 新增第三方库：`PyYAML`, `requests`, `cryptography`, `chardet`（`keyring` 可选）
 - SQLite 使用标准库 `sqlite3`，WAL 模式
 - GUI 不变：Flet，不引入额外 GUI 依赖
 - 网络请求全部超时设置（AI/HTTP/Webhook 一律 ≤ 30s）
