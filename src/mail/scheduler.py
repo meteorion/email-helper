@@ -72,6 +72,9 @@ class MailScheduler:
         self.workflow_engine = workflow_engine
         self.cache_repository = cache_repository
 
+        # 每次 fetch 完成后触发（无论是否有新邮件），签名: (new_mails: list, success: bool)
+        self.on_fetch_complete: Optional[Callable[[list, bool], None]] = None
+
         self._scheduler: Optional[BackgroundScheduler] = None
         self._running = False
 
@@ -216,10 +219,12 @@ class MailScheduler:
             if truly_new:
                 self._dispatch_new_mails(truly_new)
 
+            self._fire_fetch_complete(truly_new, success=True)
             return truly_new
 
         except Exception as e:
             logger.error(f"拉取邮件失败: {e}", exc_info=True)
+            self._fire_fetch_complete([], success=False)
             return []
 
     def _is_within_work_hours(self) -> bool:
@@ -276,6 +281,20 @@ class MailScheduler:
                 self.on_new_mails(new_mails)
             except Exception as e:
                 logger.error(f"新邮件回调执行失败: {e}")
+
+    def _fire_fetch_complete(self, new_mails: list, success: bool) -> None:
+        if self.on_fetch_complete is not None:
+            try:
+                self.on_fetch_complete(new_mails, success)
+            except Exception as e:
+                logger.error(f"on_fetch_complete 回调失败: {e}")
+
+    def get_next_run_time(self) -> Optional[datetime]:
+        """返回下次计划运行时间，调度器未启动时返回 None"""
+        if not self._scheduler:
+            return None
+        job = self._scheduler.get_job("mail_fetch")
+        return job.next_run_time if job else None
 
     def is_running(self) -> bool:
         """检查是否正在运行"""

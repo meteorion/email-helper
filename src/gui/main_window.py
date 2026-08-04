@@ -1,8 +1,8 @@
 """主窗口 - Flet 实现（四栏布局 + 深浅双主题）
 
 严格对齐 email_desktop_ui_design.html 设计稿：
-  - 第一栏：导航 Rail（72px，深蓝背景，Logo + 垂直文字导航 + 用户头像）
-  - 第二栏：文件夹侧栏（260px，浅灰背景，撰写按钮 + 文件夹 + 标签 + 存储）
+  - 第一栏：自定义导航侧栏（160px，深蓝背景，Logo + 横向文字导航 + 底部用户头像 + 设置）
+  - 第二栏：文件夹侧栏（220px，浅灰背景，撰写按钮 + 文件夹 + 标签）
   - 第三栏：邮件列表（380px，搜索框 + 筛选Tab + 邮件项）
   - 第四栏：邮件详情（自适应，工具栏 + 大标题 + 发件人 + 正文 + 附件 + 回复区）
 
@@ -19,17 +19,19 @@ from src.gui.theme import (
 from src.gui.mail_list import MailListView
 from src.gui.mail_detail import MailDetailView
 from src.gui.folder_sidebar import FolderSidebar
+from src.gui.settings_page import SettingsPage
+from src.gui.contacts_page import ContactsPage
+from src.gui.tasks_page import TasksPage
+from src.gui.demo_data import build_demo_mails, DEMO_FOLDER_COUNTS
 
 logger = get_logger("gui.main")
 
 
-# Rail 导航项：(key, 标签, 图标)
+# Rail 导航项：(key, 标签) — 4 个一级模块：邮件 / 联系人 / 任务 / 设置
 RAIL_ITEMS = [
-    ("inbox", "邮件", ft.Icons.INBOX),
-    ("sent", "已发", ft.Icons.SEND_OUTLINED),
-    ("alert", "告警", ft.Icons.WARNING_AMBER_OUTLINED),
-    ("approval", "审批", ft.Icons.APPROVAL_OUTLINED),
-    ("info", "资讯", ft.Icons.ARTICLE_OUTLINED),
+    ("mail", "邮件"),
+    ("contacts", "联系人"),
+    ("tasks", "任务"),
 ]
 
 
@@ -42,7 +44,11 @@ class MailApp:
         self._fetching = False
         self._fetch_worker = None
         self._on_fetch = None
-        self._rail_selected = "inbox"
+        self._rail_selected = "mail"
+        self._in_settings = False
+        self._settings_page = None
+        self._contacts_page = None
+        self._tasks_page = None
 
         # 后续注入的服务引用（main.py 会赋值）
         self._scheduler = None
@@ -53,6 +59,16 @@ class MailApp:
         self._classifier = None
         self._workflow_engine = None
         self._notification_engine = None
+
+        # 状态栏持久化（重建 UI 时恢复）
+        self._connected = False
+        self._last_fetch_str = "--"
+        self._pending_count = 0
+        self._next_fetch_str = "--"
+
+        # 真实邮件数据加载标志（main.py 注入真实邮件后置 True，避免示例数据覆盖）
+        self._real_mails_loaded = False
+        self._current_mails: list = []   # 缓存最近一次 set_mails 的数据，供 UI 重建后恢复
 
         self._init_page()
         self._apply_theme()
@@ -112,20 +128,60 @@ class MailApp:
             )
         )
 
-    # ===== 第一栏：导航 Rail（72px，深蓝） =====
+        if self._real_mails_loaded:
+            # UI 重建后用缓存的真实邮件恢复列表（返回设置页/主题切换等场景）
+            if self._current_mails:
+                self._mail_list.set_mails(self._current_mails)
+        else:
+            # 首次启动且尚未拉取真实邮件时，填充高保真原型示例数据
+            self._load_demo_data()
+
+    # ---- 高保真原型示例数据 ----
+    def _load_demo_data(self):
+        """加载与设计稿主界面一致的示例邮件、文件夹徽章，并默认选中首封展示详情。
+
+        当 main.py 后续注入真实邮件时会通过 set_mails() 覆盖本数据。
+        """
+        mails = build_demo_mails()
+        self._mail_list.set_mails(mails)
+
+        # 文件夹未读徽章（对齐设计稿）
+        for folder_key, count in DEMO_FOLDER_COUNTS.items():
+            self._folder_sidebar.set_unread_count(folder_key, count)
+
+        # 默认选中首封并展示详情
+        first = mails[0]
+        self._mail_list._selected_id = first.message_id
+        self._mail_list._refresh_list()
+        self._mail_detail.show_mail(first)
+
+        try:
+            self.page.update()
+        except Exception as e:
+            logger.warning(f"示例数据加载后 page.update 失败: {e}")
+
+    # ===== 第一栏：自定义导航侧栏（160px，深蓝，图标+横向文字） =====
+    # 图标使用 Flet 内置 Material Icons
+    _RAIL_ICONS = {
+        "mail": ft.Icons.MAIL_OUTLINE,
+        "contacts": ft.Icons.CONTACTS_OUTLINED,
+        "tasks": ft.Icons.CHECKLIST,
+        "_settings": ft.Icons.SETTINGS_OUTLINED,
+    }
+
     def _build_rail(self) -> ft.Container:
-        """导航 Rail：Logo + 垂直文字导航 + 底部头像"""
+        """自定义宽侧栏：Logo + 图标+横向文字导航 + 底部设置（无头像）"""
         c = self._c
 
-        # Logo 方块（蓝色渐变，文字 "E"）
+        # Logo 渐变背景条（居中「助手」文字，对齐 HTML .rail-logo）
         logo = ft.Container(
             content=ft.Text(
-                "E",
-                size=20,
+                "助手",
+                size=14,
                 weight=ft.FontWeight.W_700,
                 color=c.TEXT_ON_PRIMARY,
             ),
-            width=40,
+            width=140,
             height=40,
             border_radius=10,
             alignment=ft.Alignment(0, 0),
@@ -136,30 +192,10 @@ class MailApp:
             ),
         )
 
-        # 导航项（垂直文字）
+        # 导航项（图标 + 横向文字）
         nav_items = []
-        for key, label, _icon in RAIL_ITEMS:
+        for key, label in RAIL_ITEMS:
             nav_items.append(self._build_rail_item(key, label))
-
-        # 底部头像（圆形渐变，文字 "W"）
-        avatar = ft.Container(
-            content=ft.Text(
-                "W",
-                size=14,
-                weight=ft.FontWeight.W_600,
-                color=c.TEXT_ON_PRIMARY,
-            ),
-            width=36,
-            height=36,
-            border_radius=50,
-            alignment=ft.Alignment(0, 0),
-            gradient=ft.LinearGradient(
-                begin=ft.Alignment(-1, -1),
-                end=ft.Alignment(1, 1),
-                colors=c.AVATAR_GRADIENT_1,
-            ),
-            tooltip="王明",
-        )
 
         # 设置项
         settings_item = self._build_rail_item("_settings", "设置")
@@ -171,67 +207,73 @@ class MailApp:
                 *nav_items,
                 ft.Container(expand=True),
                 settings_item,
-                ft.Container(height=8),
-                avatar,
             ],
             alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8,
+            spacing=6,
         )
 
         return ft.Container(
             content=self._rail,
-            width=72,
+            width=160,
             bgcolor=c.BG_RAIL,
-            padding=ft.Padding(0, 16, 0, 16),
+            padding=ft.Padding(10, 16, 10, 16),
             expand=False,
         )
 
     def _build_rail_item(self, key: str, label: str) -> ft.Container:
-        """单个 Rail 导航项（垂直文字 + 选中竖条）"""
+        """单个导航项：图标 + 横向文字 + 选中竖条（左侧圆角指示器）"""
         c = self._c
         is_selected = (key == self._rail_selected)
         text_color = c.TEXT_RAIL_SELECTED if is_selected else c.TEXT_RAIL
         bgcolor = c.BG_RAIL_SELECTED if is_selected else None
+        icon_color = c.TEXT_RAIL_SELECTED if is_selected else c.TEXT_RAIL
 
-        # 垂直文字：每个字一行
-        vertical_text = "\n".join(list(label))
-
-        # 选中态左侧竖条
+        # 选中态左侧竖条（高度 22px，对齐 HTML .rail-item.active::before）
         indicator = ft.Container(
             width=3,
-            height=24,
+            height=22,
             bgcolor=c.PRIMARY_400,
             border_radius=ft.BorderRadius(top_left=0, top_right=3, bottom_left=0, bottom_right=3),
             visible=is_selected,
         )
 
+        icon_name = self._RAIL_ICONS.get(key, ft.Icons.CIRCLE)
+
         return ft.Container(
             content=ft.Stack(
                 [
-                    # 选中竖条（左侧偏外）
+                    # 选中竖条（左侧）
                     ft.Container(
                         content=indicator,
-                        left=-16,
-                        top=12,
+                        left=0,
+                        top=9,
                     ),
-                    # 文字（居中）
+                    # 图标 + 文字（横向，左对齐）
                     ft.Container(
-                        content=ft.Text(
-                            vertical_text,
-                            size=11,
-                            color=text_color,
-                            weight=ft.FontWeight.W_500,
-                            text_align=ft.TextAlign.CENTER,
+                        content=ft.Row(
+                            [
+                                ft.Icon(icon_name, size=18, color=icon_color),
+                                ft.Text(
+                                    label,
+                                    size=13,
+                                    color=text_color,
+                                    weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.W_500,
+                                ),
+                            ],
+                            spacing=10,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
+                        left=12,
+                        top=0,
+                        height=40,
                         alignment=ft.Alignment(0, 0),
-                        padding=ft.Padding(4, 0, 4, 0),
                     ),
                 ],
             ),
-            width=48,
-            height=48,
-            border_radius=12,
+            width=140,
+            height=40,
+            border_radius=10,
             bgcolor=bgcolor,
             data=key,
             on_click=self._on_rail_clicked,
@@ -243,30 +285,151 @@ class MailApp:
         if not key:
             return
         if key == "_settings":
-            if self._on_fetch:
-                self._on_fetch("settings", None)
+            self._show_settings()
             return
+        # 如果当前在设置页面，先切回
+        if self._in_settings:
+            self._in_settings = False
         self._rail_selected = key
-        # 触发分类切换
-        self._on_category_changed(key)
-        # 重建 Rail
+        # 根据模块切换页面
+        if key == "contacts":
+            self._show_contacts()
+        elif key == "tasks":
+            self._show_tasks()
+        else:
+            # mail / stats 走原有四栏布局
+            self._on_category_changed(key)
+            self.page.clean()
+            self._build_ui()
+            self.page.update()
+        logger.info(f"Rail 切换到: {key}")
+
+    def _show_settings(self):
+        """切换到设置页面（保留已有实例状态）"""
+        self._in_settings = True
+        c = self._c
+
+        # 首次创建，后续重建复用已有实例
+        if not self._settings_page:
+            self._settings_page = SettingsPage(
+                page=self.page,
+                is_dark=self._is_dark,
+                on_back=self._back_to_mail,
+                on_theme_change=self._on_settings_theme_change,
+                on_open_account=self._goto_account_settings,
+                on_rebuild=self._show_settings,
+            )
+        else:
+            self._settings_page._is_dark = self._is_dark
+
+        rail = self._build_rail()
+        settings_view = self._settings_page.build()
+
+        content_row = ft.Row(
+            [rail, settings_view],
+            spacing=0,
+            expand=True,
+        )
+        status_bar = self._build_status_bar()
+
+        self.page.clean()
+        self.page.add(
+            ft.Column(
+                [content_row, status_bar],
+                spacing=0,
+                expand=True,
+            )
+        )
+        self.page.update()
+        logger.info(f"设置页面: tab={self._settings_page._selected_tab}")
+
+    def _show_contacts(self):
+        """切换到联系人页面"""
+        if not self._contacts_page:
+            self._contacts_page = ContactsPage(is_dark=self._is_dark)
+        else:
+            self._contacts_page.update_theme(self._is_dark)
+
+        rail = self._build_rail()
+        content_row = ft.Row(
+            [rail, self._contacts_page],
+            spacing=0,
+            expand=True,
+        )
+        status_bar = self._build_status_bar()
+
+        self.page.clean()
+        self.page.add(
+            ft.Column(
+                [content_row, status_bar],
+                spacing=0,
+                expand=True,
+            )
+        )
+        self.page.update()
+        logger.info("切换到联系人页面")
+
+    def _show_tasks(self):
+        """切换到任务页面"""
+        if not self._tasks_page:
+            self._tasks_page = TasksPage(is_dark=self._is_dark)
+        else:
+            self._tasks_page.update_theme(self._is_dark)
+
+        rail = self._build_rail()
+        content_row = ft.Row(
+            [rail, self._tasks_page],
+            spacing=0,
+            expand=True,
+        )
+        status_bar = self._build_status_bar()
+
+        self.page.clean()
+        self.page.add(
+            ft.Column(
+                [content_row, status_bar],
+                spacing=0,
+                expand=True,
+            )
+        )
+        self.page.update()
+        logger.info("切换到任务页面")
+
+    def _back_to_mail(self):
+        """从设置页面返回邮件视图"""
+        self._in_settings = False
+        self._settings_page = None
         self.page.clean()
         self._build_ui()
         self.page.update()
-        logger.info(f"Rail 切换到: {key}")
+        logger.info("返回邮件视图")
+
+    def _on_settings_theme_change(self, is_dark: bool):
+        """设置页面中切换主题"""
+        self._is_dark = is_dark
+        self._apply_theme()
+        # 重建设置页面
+        if self._in_settings and self._settings_page:
+            self._settings_page.update_theme(is_dark)
+            self._show_settings()
+
+    def _goto_account_settings(self):
+        """进入设置页并定位到账户管理面板"""
+        if self._settings_page:
+            self._settings_page._selected_tab = "account"
+        self._show_settings()
+        logger.info("跳转到账户管理面板")
 
     def _on_category_changed(self, key: str):
         categories = {
-            "inbox": "收件箱",
-            "sent": "已发送",
-            "alert": "告警",
-            "approval": "审批",
-            "info": "资讯",
+            "mail": "邮件",
+            "contacts": "联系人",
+            "tasks": "任务",
         }
         name = categories.get(key, key)
         if hasattr(self, "_list_title"):
             self._list_title.value = name
-        logger.info(f"切换到分类: {name}")
+        logger.info(f"切换到模块: {name}")
 
     # ===== 第二栏：文件夹侧栏 =====
     def _build_folder_sidebar(self) -> ft.Container:
@@ -278,7 +441,7 @@ class MailApp:
         )
         return ft.Container(
             content=self._folder_sidebar,
-            width=260,
+            width=220,
             bgcolor=c.BG_SIDEBAR,
             expand=False,
         )
@@ -315,12 +478,22 @@ class MailApp:
             width=8,
             height=8,
             border_radius=4,
-            bgcolor=c.TEXT_SECONDARY,
+            bgcolor=c.SUCCESS if self._connected else c.TEXT_SECONDARY,
         )
-        self._status_connection = ft.Text("未连接", size=Font.AUX, color=c.TEXT_SECONDARY)
-        self._status_last_fetch = ft.Text("上次拉取: --", size=Font.AUX, color=c.TEXT_SECONDARY)
-        self._status_pending = ft.Text("待处理: 0", size=Font.AUX, color=c.TEXT_SECONDARY)
-        self._status_next = ft.Text("下次: --", size=Font.AUX, color=c.TEXT_SECONDARY)
+        self._status_connection = ft.Text(
+            "已连接" if self._connected else "未连接",
+            size=Font.AUX,
+            color=c.TEXT_PRIMARY if self._connected else c.TEXT_SECONDARY,
+        )
+        self._status_last_fetch = ft.Text(
+            f"上次拉取: {self._last_fetch_str}", size=Font.AUX, color=c.TEXT_SECONDARY,
+        )
+        self._status_pending = ft.Text(
+            f"待处理: {self._pending_count}", size=Font.AUX, color=c.TEXT_SECONDARY,
+        )
+        self._status_next = ft.Text(
+            f"下次: {self._next_fetch_str}", size=Font.AUX, color=c.TEXT_SECONDARY,
+        )
 
         # 主题切换按钮（右侧）
         self._theme_btn = ft.Container(
@@ -363,26 +536,37 @@ class MailApp:
         """文件夹/分类切换"""
         name_map = {
             "inbox": "收件箱",
-            "starred": "星标邮件",
             "sent": "已发送",
             "drafts": "草稿",
             "archive": "归档",
-            "trash": "已删除",
             "work": "工作",
             "approval": "审批",
             "alert": "告警",
             "info": "资讯",
-            "important": "重要",
-            "attachments": "带附件",
-            "spam": "垃圾箱",
         }
         if hasattr(self, "_mail_list"):
             self._mail_list.set_title(name_map.get(folder_key, folder_key))
         self.page.update()
 
+    def get_mail_by_id(self, message_id: str):
+        """从当前列表查找 MailData，供外部回调使用"""
+        if hasattr(self, "_mail_list"):
+            for m in self._mail_list._mails:
+                if m.message_id == message_id:
+                    return m
+        return None
+
     def _on_mail_selected(self, message_id: str):
         logger.info(f"选中邮件: {message_id}")
-        if self._on_fetch:
+        mail = self.get_mail_by_id(message_id)
+        if mail:
+            was_unread = not mail.is_read
+            self.show_mail_detail(mail)
+            # 后台写 DB 已读标记（需要邮件服务就绪）
+            if was_unread and self._on_fetch:
+                self._on_fetch("mark_read", message_id)
+        elif self._on_fetch:
+            # 列表中找不到时降级走旧逻辑
             self._on_fetch("select", message_id)
 
     def _on_fetch_clicked(self, e=None):
@@ -415,30 +599,35 @@ class MailApp:
     # ---- 公共方法（保持 main.py 兼容） ----
     def update_connection_status(self, connected: bool):
         c = self._c
+        self._connected = connected
         if not hasattr(self, "_status_dot"):
             return
         if connected:
             self._status_connection.value = "已连接"
+            self._status_connection.color = c.TEXT_PRIMARY
             self._status_dot.bgcolor = c.SUCCESS
         else:
             self._status_connection.value = "未连接"
+            self._status_connection.color = c.TEXT_SECONDARY
             self._status_dot.bgcolor = c.ERROR
         self.page.update()
 
     def update_last_fetch_time(self, time_str: str):
+        self._last_fetch_str = time_str
         if hasattr(self, "_status_last_fetch"):
             self._status_last_fetch.value = f"上次拉取: {time_str}"
             self.page.update()
 
     def update_pending_count(self, count: int):
+        self._pending_count = count
         if hasattr(self, "_status_pending"):
             self._status_pending.value = f"待处理: {count}"
-        # 同步更新收件箱未读数
         if hasattr(self, "_folder_sidebar"):
             self._folder_sidebar.set_unread_count("inbox", count)
         self.page.update()
 
     def update_next_fetch_time(self, time_str: str):
+        self._next_fetch_str = time_str
         if hasattr(self, "_status_next"):
             self._status_next.value = f"下次: {time_str}"
             self.page.update()
@@ -450,6 +639,8 @@ class MailApp:
         self.page.update()
 
     def set_mails(self, mails: list):
+        self._real_mails_loaded = True
+        self._current_mails = list(mails)
         self._mail_list.set_mails(mails)
         self.page.update()
 

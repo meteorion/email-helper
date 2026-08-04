@@ -20,6 +20,7 @@
 
 import sys
 import json
+import threading
 from pathlib import Path
 from datetime import datetime
 
@@ -181,7 +182,7 @@ def main(page):
             execution_repo=exec_repo,
             secret_mgr=secret_mgr,
             notification_engine=notification_engine,
-            llm_client=classifier._llm if classifier else None,
+            llm_client=classifier.llm if classifier else None,
             smtp_client=None,  # 延迟注入
             mail_repository=mail_repo,
             imap_client=None,  # 延迟注入
@@ -241,14 +242,14 @@ def main(page):
             email_addr = acct.get("email", "")
 
             imap_client = ImapClient(
-                host=imap_config.get("host", "imap.exmail.qq.com"),
+                host=imap_config.get("host", "mail.yeahka.com"),
                 port=imap_config.get("port", 993),
                 username=email_addr,
                 password=password,
                 use_ssl=imap_config.get("ssl", True),
             )
             smtp_client = SmtpClient(
-                host=smtp_config.get("host", "smtp.exmail.qq.com"),
+                host=smtp_config.get("host", "mail.yeahka.com"),
                 port=smtp_config.get("port", 465),
                 username=email_addr,
                 password=password,
@@ -296,28 +297,143 @@ def main(page):
                 workflow_engine=workflow_engine,
                 cache_repository=cache_repo,
             )
+            # ── GUI 回调辅助 ─────────────────────
+            def _reload_mails_to_gui():
+                """从 DB 直接构建 MailData 并推送到 GUI（避免逐文件读磁盘）"""
+                from src.core.models import MailData, Attachment
+                try:
+                    rows = mail_repo.list_mails(limit=200)
+                    mail_objects = []
+                    for row in rows:
+                        try:
+                            send_t = datetime.fromisoformat(row["send_time"])
+                            recv_t = datetime.fromisoformat(
+                                row.get("receive_time") or row["send_time"])
+                            tags = json.loads(row.get("tags") or "[]")
+                            m = MailData(
+                                message_id=row["message_id"],
+                                sender=row.get("sender", ""),
+                                sender_domain=row.get("sender_domain", ""),
+                                recipient=row.get("recipient", ""),
+                                subject=row.get("subject", ""),
+                                send_time=send_t,
+                                receive_time=recv_t,
+                                body_text=row.get("body_text") or "",
+                                body_html=row.get("body_html"),
+                                attachments=[],
+                                is_read=bool(row.get("is_read", 0)),
+                                is_sent=bool(row.get("is_sent", 0)),
+                                local_file_path=row.get("body_file_path"),
+                                category=row.get("category"),
+                                priority=row.get("priority"),
+                                confidence=row.get("confidence", 0.0),
+                                need_reply=bool(row.get("need_reply", 0)),
+                                tags=tags if isinstance(tags, list) else [],
+                                classify_source=row.get("classify_source"),
+                                status=row.get("status", "new"),
+                            )
+                            mail_objects.append(m)
+                        except Exception as ex:
+                            logger.warning(f"构建 MailData 行失败: {ex}")
+                    if mail_objects:
+                        app.set_mails(mail_objects)
+                    logger.info(f"GUI 邮件列表已刷新: {len(mail_objects)} 封")
+                except Exception as ex:
+                    logger.error(f"GUI 邮件列表刷新失败: {ex}")
+
+            def _update_status_bar_after_fetch(new_mails: list, success: bool):
+                """fetch 完成后更新底部状态栏（在 APScheduler 后台线程中调用）"""
+                try:
+                    now_str = datetime.now().strftime("%H:%M")
+                    if success:
+                        app.update_last_fetch_time(now_str)
+                    # 下次拉取时间
+                    nxt = scheduler.get_next_run_time()
+                    if nxt:
+                        app.update_next_fetch_time(nxt.strftime("%H:%M"))
+                    # 新邮件 → 刷新列表并更新待处理数
+                    if new_mails:
+                        _reload_mails_to_gui()
+                        pending = mail_repo.count_unread() if hasattr(mail_repo, "count_unread") else len(new_mails)
+                        app.update_pending_count(pending)
+                except Exception as ex:
+                    logger.error(f"状态栏更新失败: {ex}")
+
+            def _on_new_mails_gui(new_mails: list):
+                """scheduler.on_new_mails 回调：新邮件到达时更新 GUI"""
+                _reload_mails_to_gui()
+
+            # 注入回调
+            scheduler.on_new_mails    = _on_new_mails_gui
+            scheduler.on_fetch_complete = _update_status_bar_after_fetch
+
+            # ── 手动拉取 + 邮件选中 回调 ─────────
+            def _on_fetch_action(action: str, data):
+                if action == "fetch":
+                    def _run():
+                        try:
+                            new_mails = scheduler.fetch_now()
+                            now_str = datetime.now().strftime("%H:%M")
+                            app.update_last_fetch_time(now_str)
+                            nxt = scheduler.get_next_run_time()
+                            if nxt:
+                                app.update_next_fetch_time(nxt.strftime("%H:%M"))
+                            if new_mails:
+                                _reload_mails_to_gui()
+                            app.update_pending_count(mail_repo.count_unread())
+                        except Exception as ex:
+                            logger.error(f"手动拉取失败: {ex}")
+                        finally:
+                            app.set_fetch_button_enabled(True)
+                    threading.Thread(target=_run, daemon=True).start()
+
+                elif action == "mark_read":
+                    # GUI 层已显示邮件，这里只做 DB 标记
+                    message_id = data
+                    def _mark(mid=message_id):
+                        try:
+                            mail_repo.mark_as_read(mid)
+                            app.update_pending_count(mail_repo.count_unread())
+                        except Exception as ex:
+                            logger.error(f"标记已读失败: {ex}")
+                    threading.Thread(target=_mark, daemon=True).start()
+
+                elif action == "select":
+                    # 降级路径：GUI 层找不到 mail 对象时才触发
+                    message_id = data
+                    mail = app.get_mail_by_id(message_id)
+                    if mail is None:
+                        return
+                    was_unread = not mail.is_read
+                    app.show_mail_detail(mail)
+                    if was_unread:
+                        def _mark(mid=message_id):
+                            try:
+                                mail_repo.mark_as_read(mid)
+                                app.update_pending_count(mail_repo.count_unread())
+                            except Exception as ex:
+                                logger.error(f"标记已读失败: {ex}")
+                        threading.Thread(target=_mark, daemon=True).start()
+
+            app._on_fetch = _on_fetch_action
+
             scheduler.start()
             logger.info(f"邮件调度器启动 (间隔 {interval} 分钟)")
 
+            # 首次启动后更新"下次拉取"时间
+            nxt = scheduler.get_next_run_time()
+            if nxt:
+                app.update_next_fetch_time(nxt.strftime("%H:%M"))
+
             # ── 15. GUI 数据加载 ─────────────────
-            existing_mails = mail_repo.list_mails(limit=200)
-            if existing_mails:
-                # 从 JSON 文件加载完整 MailData
-                from src.core.models import MailData
-                mail_objects = []
-                for row in existing_mails:
-                    mail = mail_store.load(row["message_id"])
-                    if mail:
-                        # 补充分类信息
-                        mail.category = row.get("category")
-                        mail.priority = row.get("priority")
-                        mail.confidence = row.get("confidence", 0.0)
-                        mail.classify_source = row.get("classify_source")
-                        mail.status = row.get("status", "new")
-                        mail_objects.append(mail)
-                if mail_objects:
-                    app.set_mails(mail_objects)
-                logger.info(f"加载 {len(mail_objects)} 封已有邮件")
+            _reload_mails_to_gui()
+
+            # 初始化底部状态栏
+            try:
+                app.update_pending_count(mail_repo.count_unread())
+                app.update_last_fetch_time(datetime.now().strftime("%H:%M"))
+            except Exception as ex:
+                logger.warning(f"初始化状态栏失败: {ex}")
 
             # 存储引用
             app._scheduler = scheduler
@@ -341,19 +457,8 @@ def main(page):
     if account_config:
         _init_mail_services(account_config)
     else:
-        logger.info("未检测到账户配置，需要用户配置")
-        from src.gui.account_dialog import AccountDialog
-        dialog = AccountDialog(page)
-
-        def _on_dialog_close(e):
-            data = dialog.get_account_data()
-            if data:
-                _init_mail_services(data)
-            else:
-                page.window.close()
-
-        dialog._dialog.on_dismiss = _on_dialog_close
-        dialog.show()
+        # 未检测到账户配置：不再弹出设置对话框，用户可在设置页 → 账户管理中配置
+        logger.info("未检测到账户配置，跳过服务初始化（可在设置页 → 账户管理配置）")
 
 
 def _load_ai_config(config_dir: Path) -> dict:

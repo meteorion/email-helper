@@ -1,14 +1,18 @@
 """邮件详情组件 - Flet 实现（第四栏）
 
 严格对齐 email_desktop_ui_design.html 设计稿：
-  - 顶部工具栏：圆角按钮（返回/归档/删除/标记未读/移动到/标签）+ 头像组
+  - 顶部工具栏：图标按钮（返回/归档/删除/标记未读/移动/标签/更多）
   - 详情内容（padding 28px 36px）：
       大标题 24px Bold + 标签
       发件人区（48px 圆形渐变头像 + 姓名/邮箱/收件人 + 时间）
-      正文 Markdown
-      附件卡片（200px 宽 + 预览图 + 文件名 + 大小）
-  - 底部回复区：快捷操作 + 工具栏 + 输入框 + 发送按钮
+      正文 Markdown 渲染 + 引用折叠
+      附件卡片（分色渐变 + 预览图 + 文件名 + 大小）
+  - 底部回复区：快捷操作 + TextField 输入框 + 发送按钮
 """
+
+import re
+from email.header import decode_header as _rfc2047_decode
+from html.parser import HTMLParser
 
 import flet as ft
 
@@ -18,30 +22,139 @@ from src.gui.theme import Color, DarkColor, Radius, Font, TAG_COLOR_MAP
 
 logger = get_logger("gui.mail_detail")
 
+# 引用邮件分隔符（企业邮/QQ邮/标准 > 引用）
+_QUOTE_SEP_RE = re.compile(
+    r"(?m)^(?:"
+    r"发件人[:：][ \t]|"           # 企业邮 / Coremail
+    r"From:[ \t]|"                 # 英文
+    r"-{4,}|"                      # ---- 原始邮件 ---- 等
+    r".{0,20}在\d{4}年\d+月\d+日.{0,40}写道[:：]"  # "X 在 2026年8月4日 写道："
+    r")",
+)
 
-# 附件扩展名 → 预览配置：(渐变色属性, 显示文字)
+
+class _HtmlToText(HTMLParser):
+    """将 HTML 转为可读纯文本，保留段落结构，忽略 style/script。"""
+    # 结束时触发换行的块级标签
+    _BLOCK_END = {"p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6",
+                  "tr", "blockquote", "section", "article"}
+    _SKIP = {"style", "script", "head", "svg"}
+
+    def __init__(self):
+        super().__init__()
+        self._buf: list[str] = []
+        self._skip_depth = 0
+
+    def _ensure_newline(self):
+        """确保缓冲区以换行结尾，避免重复添加。"""
+        joined = "".join(self._buf)
+        if joined and not joined[-1] == "\n":
+            self._buf.append("\n")
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP:
+            self._skip_depth += 1
+        elif not self._skip_depth and tag == "br":
+            self._ensure_newline()
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP:
+            self._skip_depth = max(0, self._skip_depth - 1)
+        elif not self._skip_depth and tag in self._BLOCK_END:
+            self._ensure_newline()
+
+    def handle_data(self, data):
+        if not self._skip_depth:
+            self._buf.append(data)
+
+    def handle_entityref(self, name):
+        import html as _html
+        if not self._skip_depth:
+            self._buf.append(_html.unescape(f"&{name};"))
+
+    def handle_charref(self, name):
+        import html as _html
+        if not self._skip_depth:
+            self._buf.append(_html.unescape(f"&#{name};"))
+
+    def get_text(self) -> str:
+        raw = "".join(self._buf)
+        # 逐行清理行内多余空白
+        lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in raw.splitlines()]
+        text = "\n".join(lines)
+        # 最多保留一个空行
+        text = re.sub(r"\n{2,}", "\n\n", text)
+        return text.strip()
+
+
+def _html_to_text(html: str) -> str:
+    parser = _HtmlToText()
+    try:
+        parser.feed(html)
+        return parser.get_text()
+    except Exception:
+        return re.sub(r"<[^>]+>", "", html).strip()
+
+
+def _split_body(text: str) -> tuple[str, str]:
+    """拆分正文为 (主内容, 引用内容)，识别 > 前缀和中文常见引用分隔符"""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith(">"):
+            return "\n".join(lines[:i]).strip(), "\n".join(lines[i:]).strip()
+    m = _QUOTE_SEP_RE.search(text)
+    if m:
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        return text[:line_start].strip(), text[line_start:].strip()
+    return text.strip(), ""
+
+
+# 附件扩展名 → 预览配置：(渐变色属性, 预览标签, 文字色, 大小信息类型名)
 ATTACH_PRESETS = {
-    ".pdf": ("ATTACH_PDF_GRADIENT", "PDF", "rgba(220,38,38,0.9)"),
-    ".doc": ("ATTACH_XLS_GRADIENT", "DOC", "rgba(37,99,235,0.9)"),
-    ".docx": ("ATTACH_XLS_GRADIENT", "DOC", "rgba(37,99,235,0.9)"),
-    ".xls": ("ATTACH_XLS_GRADIENT", "XLS", "rgba(37,99,235,0.9)"),
-    ".xlsx": ("ATTACH_XLS_GRADIENT", "XLS", "rgba(37,99,235,0.9)"),
-    ".ppt": ("ATTACH_XLS_GRADIENT", "PPT", "rgba(37,99,235,0.9)"),
-    ".pptx": ("ATTACH_XLS_GRADIENT", "PPT", "rgba(37,99,235,0.9)"),
-    ".zip": ("ATTACH_XLS_GRADIENT", "ZIP", "rgba(37,99,235,0.9)"),
-    ".rar": ("ATTACH_XLS_GRADIENT", "ZIP", "rgba(37,99,235,0.9)"),
-    ".png": ("ATTACH_XLS_GRADIENT", "IMG", "rgba(37,99,235,0.9)"),
-    ".jpg": ("ATTACH_XLS_GRADIENT", "IMG", "rgba(37,99,235,0.9)"),
-    ".jpeg": ("ATTACH_XLS_GRADIENT", "IMG", "rgba(37,99,235,0.9)"),
+    ".pdf": ("ATTACH_PDF_GRADIENT", "PDF", "#DC2626", "PDF"),
+    ".doc": ("ATTACH_XLS_GRADIENT", "DOC", "#2563EB", "Word"),
+    ".docx": ("ATTACH_XLS_GRADIENT", "DOC", "#2563EB", "Word"),
+    ".xls": ("ATTACH_XLS_GRADIENT", "XLS", "#2563EB", "Excel"),
+    ".xlsx": ("ATTACH_XLS_GRADIENT", "XLS", "#2563EB", "Excel"),
+    ".ppt": ("ATTACH_XLS_GRADIENT", "PPT", "#2563EB", "PowerPoint"),
+    ".pptx": ("ATTACH_XLS_GRADIENT", "PPT", "#2563EB", "PowerPoint"),
+    ".zip": ("ATTACH_ZIP_GRADIENT", "ZIP", "#EA580C", "压缩包"),
+    ".rar": ("ATTACH_ZIP_GRADIENT", "ZIP", "#EA580C", "压缩包"),
+    ".7z": ("ATTACH_ZIP_GRADIENT", "7Z", "#EA580C", "压缩包"),
+    ".png": ("ATTACH_IMG_GRADIENT", "IMG", "#16A34A", "图片"),
+    ".jpg": ("ATTACH_IMG_GRADIENT", "IMG", "#16A34A", "图片"),
+    ".jpeg": ("ATTACH_IMG_GRADIENT", "IMG", "#16A34A", "图片"),
+    ".gif": ("ATTACH_IMG_GRADIENT", "GIF", "#16A34A", "图片"),
+    ".svg": ("ATTACH_IMG_GRADIENT", "SVG", "#16A34A", "图片"),
 }
 
 
+def _decode_rfc2047(text: str) -> str:
+    """解码 RFC2047 编码的邮件头"""
+    try:
+        parts = _rfc2047_decode(text)
+        result = ""
+        for part, charset in parts:
+            if isinstance(part, bytes):
+                result += part.decode(charset or "utf-8", errors="replace")
+            else:
+                result += part
+        return result.strip()
+    except Exception:
+        return text
+
+
 def _extract_sender(sender: str) -> tuple[str, str]:
-    """从 sender 提取 (显示名, 邮箱)"""
+    """从 sender 提取 (显示名, 邮箱)，自动解码 RFC2047"""
+    sender = _decode_rfc2047(sender)
     if "<" in sender and ">" in sender:
-        name = sender.split("<")[0].strip().strip('"')
+        name = sender.split("<")[0].strip().strip('"').strip()
         email = sender.split("<")[1].split(">")[0].strip()
-        return (name or email, email)
+        if not name or name == email:
+            name = email.split("@")[0] if "@" in email else email
+        return (name, email)
+    if "@" in sender and " " not in sender:
+        return (sender.split("@")[0], sender)
     return (sender.strip().strip('"'), "")
 
 
@@ -62,8 +175,10 @@ def _format_size(size: int) -> str:
 
 
 def _format_time(dt) -> str:
-    """格式化时间"""
+    """格式化时间，兼容 timezone-aware datetime"""
     from datetime import datetime, timedelta
+    if dt.tzinfo is not None:
+        dt = dt.astimezone().replace(tzinfo=None)
     now = datetime.now()
     if dt.date() == now.date():
         return f"今天 {dt.strftime('%H:%M')}"
@@ -103,38 +218,44 @@ class MailDetailView(ft.Column):
         self._empty_view = ft.Container(
             content=ft.Column(
                 [
-                    ft.Icon(ft.Icons.MAIL_OUTLINE, size=64, color=c.TEXT_PLACEHOLDER),
-                    ft.Text(
-                        "邮件",
-                        size=32,
-                        weight=ft.FontWeight.W_300,
-                        color=c.TEXT_PLACEHOLDER,
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.MAIL_OUTLINE, size=48, color=c.TEXT_PLACEHOLDER),
+                        width=96, height=96,
+                        border_radius=50,
+                        bgcolor=c.BG_HOVER,
+                        alignment=ft.Alignment(0, 0),
                     ),
                     ft.Text(
-                        "选择一封邮件查看详情",
-                        size=Font.BODY,
+                        "查看邮件详情",
+                        size=20,
+                        weight=ft.FontWeight.W_600,
                         color=c.TEXT_SECONDARY,
+                    ),
+                    ft.Text(
+                        "从左侧列表选择一封邮件，即可在此查看完整内容",
+                        size=Font.BODY_SM,
+                        color=c.TEXT_PLACEHOLDER,
+                        text_align=ft.TextAlign.CENTER,
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=12,
+                spacing=16,
             ),
             expand=True,
             alignment=ft.Alignment(0, 0),
         )
 
-        # 详情容器（工具栏 + 滚动内容 + 回复区）
+        # 详情容器（工具栏 + 滚动内容）
         self._toolbar = self._build_toolbar()
         self._content_scroll = ft.Column(
             spacing=0,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
         )
-        self._reply_section = self._build_reply_section()
 
         self._detail_view = ft.Column(
-            [self._toolbar, self._content_scroll, self._reply_section],
+            [self._toolbar, self._content_scroll],
             spacing=0,
             expand=True,
             visible=False,
@@ -144,78 +265,125 @@ class MailDetailView(ft.Column):
 
     # ---- 工具栏 ----
     def _build_toolbar(self) -> ft.Container:
-        """顶部工具栏（圆角按钮 + 头像组）"""
+        """顶部工具栏（图标按钮 + 更多菜单）"""
         c = self._colors
 
-        def make_btn(icon, label, on_click=None):
+        def make_icon_btn(icon, tooltip, on_click=None, danger=False):
+            """图标按钮（hover 背景高亮）"""
+            icon_color = c.ERROR if danger else c.TEXT_SECONDARY
             return ft.Container(
-                content=ft.Row(
-                    [ft.Icon(icon, size=14, color=c.TEXT_SECONDARY)] if icon else [],
-                    spacing=0,
-                ),
-                tooltip=label,
-                on_click=on_click,
-                padding=ft.Padding(8, 5, 8, 5),
-                border_radius=15,
+                content=ft.Icon(icon, size=18, color=icon_color),
+                width=32, height=32,
+                border_radius=8,
+                tooltip=tooltip,
                 ink=True,
+                on_hover=lambda e: (
+                    setattr(e.control, 'bgcolor', c.BG_HOVER) if e.data == 'true'
+                    else setattr(e.control, 'bgcolor', None),
+                    e.control.update() if e.control.page else None,
+                ),
+                on_click=on_click,
             )
 
-        # 头像组（3 个重叠小头像）
-        avatar_gradients = [c.AVATAR_GRADIENT_1, c.AVATAR_GRADIENT_2, c.AVATAR_GRADIENT_3]
-        avatar_letters = ["张", "李", "王"]
-        mini_avatars = []
-        for i, (grad, letter) in enumerate(zip(avatar_gradients, avatar_letters)):
-            mini_avatars.append(
-                ft.Container(
-                    content=ft.Text(
-                        letter,
-                        size=11,
-                        color=c.TEXT_ON_PRIMARY,
-                        weight=ft.FontWeight.W_600,
-                    ),
-                    width=28,
-                    height=28,
-                    border_radius=50,
-                    alignment=ft.Alignment(0, 0),
-                    gradient=ft.LinearGradient(
-                        begin=ft.Alignment(-1, -1),
-                        end=ft.Alignment(1, 1),
-                        colors=grad,
-                    ),
-                    border=ft.Border.all(2, c.BG_MAIN),
-                    margin=ft.Margin(-6 if i > 0 else 0, 0, 0, 0),
-                )
-            )
+        # 分隔线
+        separator = ft.Container(
+            width=1, height=20,
+            bgcolor=c.BORDER,
+            margin=ft.Margin(6, 0, 6, 0),
+        )
 
         return ft.Container(
             content=ft.Row(
                 [
-                    make_btn(ft.Icons.ARROW_BACK, "返回", self._on_back),
-                    make_btn(ft.Icons.ARCHIVE_OUTLINED, "归档", self._on_archive),
-                    make_btn(ft.Icons.DELETE_OUTLINE, "删除", self._on_delete),
-                    # 分隔线
-                    ft.Container(
-                        width=1,
-                        height=20,
-                        bgcolor=c.BORDER,
-                        margin=ft.Margin(8, 0, 8, 0),
-                    ),
-                    make_btn(ft.Icons.MARK_EMAIL_UNREAD_OUTLINED, "标记未读", self._on_mark_unread),
-                    make_btn(ft.Icons.DRIVE_FILE_MOVE_OUTLINED, "移动到", self._on_move),
-                    make_btn(ft.Icons.LABEL_OUTLINED, "标签", self._on_label),
-                    make_btn(ft.Icons.MORE_VERT, "更多", self._on_more),
+                    make_icon_btn(ft.Icons.ARROW_BACK, "返回", self._on_back),
+                    make_icon_btn(ft.Icons.ARCHIVE_OUTLINED, "归档", self._on_archive),
+                    make_icon_btn(ft.Icons.DELETE_OUTLINE, "删除", self._on_delete, danger=True),
+                    separator,
+                    make_icon_btn(ft.Icons.MARK_EMAIL_UNREAD_OUTLINED, "标记未读", self._on_mark_unread),
+                    make_icon_btn(ft.Icons.DRIVE_FILE_MOVE_OUTLINED, "移动到", self._on_move),
+                    make_icon_btn(ft.Icons.LABEL_OUTLINED, "标签", self._on_label),
                     ft.Container(expand=True),
-                    # 头像组
-                    ft.Row(mini_avatars, spacing=0),
+                    make_icon_btn(ft.Icons.MORE_VERT, "更多", self._on_more),
                 ],
-                spacing=4,
+                spacing=2,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding(24, 12, 24, 12),
+            padding=ft.Padding(20, 10, 20, 10),
             border=ft.Border(bottom=ft.border.BorderSide(1, c.BORDER_LIGHT)),
         )
 
     # ---- 详情内容 ----
+    def _build_mail_header(self, mail: MailData) -> ft.Column:
+        """邮件头部：大标题 + 标签 + 发件人区（不含正文/附件）"""
+        c = self._colors
+        sender_name, sender_email = _extract_sender(mail.sender)
+        avatar_letter = _get_avatar_letter(sender_name)
+
+        subject = ft.Text(
+            mail.subject or "(无主题)",
+            size=Font.DETAIL_SUBJECT,
+            weight=ft.FontWeight.W_700,
+            color=c.TEXT_PRIMARY,
+        )
+
+        tag_row = ft.Row(spacing=8)
+        if mail.tags:
+            for tag in mail.tags[:5]:
+                bg, txt = _get_tag_colors(tag, c)
+                tag_row.controls.append(ft.Container(
+                    content=ft.Text(tag, size=Font.TINY, color=txt, weight=ft.FontWeight.W_500),
+                    bgcolor=bg, border_radius=Radius.TAB, padding=ft.Padding(8, 2, 8, 2),
+                ))
+        if mail.priority == "high":
+            bg, txt = c.TAG_HIGH
+            tag_row.controls.append(ft.Container(
+                content=ft.Text("高优先级", size=Font.TINY, color=txt, weight=ft.FontWeight.W_500),
+                bgcolor=bg, border_radius=Radius.TAB, padding=ft.Padding(8, 2, 8, 2),
+            ))
+        tags_container = ft.Container(
+            content=tag_row, margin=ft.Margin(0, 0, 0, 24), visible=bool(tag_row.controls),
+        )
+
+        sender_avatar = ft.Container(
+            content=ft.Text(avatar_letter, size=18, color=c.TEXT_ON_PRIMARY, weight=ft.FontWeight.W_700),
+            width=48, height=48, border_radius=50, alignment=ft.Alignment(0, 0),
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1), colors=c.AVATAR_GRADIENT_2,
+            ),
+        )
+        sender_email_text = (
+            ft.Text(sender_email, size=Font.BODY_SM, color=c.TEXT_SECONDARY)
+            if sender_email else ft.Container()
+        )
+        meta_row = ft.Row([
+            ft.Text("收件人：", size=Font.AUX, color=c.TEXT_PLACEHOLDER),
+            ft.Text(mail.recipient or "我", size=Font.AUX, color=c.TEXT_SECONDARY),
+        ], spacing=0)
+        time_text = ft.Text(_format_time(mail.send_time), size=Font.BODY_SM, color=c.TEXT_SECONDARY)
+        attach_count_text = (
+            ft.Text(f"{len(mail.attachments)} 个附件", size=Font.SMALL, color=c.TEXT_SECONDARY)
+            if mail.attachments else ft.Container()
+        )
+        sender_section = ft.Container(
+            content=ft.Row([
+                sender_avatar,
+                ft.Column(
+                    [ft.Text(sender_name, size=Font.BODY_LG, weight=ft.FontWeight.W_600, color=c.TEXT_PRIMARY),
+                     sender_email_text, meta_row],
+                    spacing=4, expand=True,
+                ),
+                ft.Column([time_text, attach_count_text], spacing=2,
+                          horizontal_alignment=ft.CrossAxisAlignment.END),
+            ], spacing=14, vertical_alignment=ft.CrossAxisAlignment.START),
+            padding=ft.Padding(0, 16, 0, 16),
+            border=ft.Border(
+                top=ft.border.BorderSide(1, c.BORDER_LIGHT),
+                bottom=ft.border.BorderSide(1, c.BORDER_LIGHT),
+            ),
+            margin=ft.Margin(0, 0, 0, 0),
+        )
+        return ft.Column([subject, tags_container, sender_section], spacing=0)
+
     def _build_detail_content(self) -> ft.Column:
         """详情内容（大标题 + 标签 + 发件人 + 正文 + 附件）"""
         c = self._colors
@@ -306,10 +474,13 @@ class MailDetailView(ft.Column):
             color=c.TEXT_SECONDARY,
         ) if sender_email else ft.Container()
 
-        meta_text = ft.Text(
-            f"收件人：{mail.recipient or '我'}",
-            size=Font.AUX,
-            color=c.TEXT_SECONDARY,
+        # 收件人信息（仅展示真实数据）
+        meta_row = ft.Row(
+            [
+                ft.Text("收件人：", size=Font.AUX, color=c.TEXT_PLACEHOLDER),
+                ft.Text(mail.recipient or "我", size=Font.AUX, color=c.TEXT_SECONDARY),
+            ],
+            spacing=0,
         )
 
         time_text = ft.Text(
@@ -329,12 +500,9 @@ class MailDetailView(ft.Column):
                     sender_avatar,
                     ft.Column(
                         [
-                            ft.Row(
-                                [sender_name_text, sender_email_text],
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            ),
-                            meta_text,
+                            sender_name_text,
+                            sender_email_text,
+                            meta_row,
                         ],
                         spacing=4,
                         expand=True,
@@ -356,18 +524,7 @@ class MailDetailView(ft.Column):
             margin=ft.Margin(0, 0, 0, 28),
         )
 
-        # 正文（Markdown）
-        body_content = mail.body_html if mail.body_html else mail.body_text or ""
-        body_md = ft.Markdown(
-            body_content,
-            selectable=True,
-            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-            soft_line_break=True,
-        )
-        body_section = ft.Container(
-            content=body_md,
-            padding=ft.Padding(0, 0, 0, 20),
-        )
+        body_section = self._build_body_section(mail)
 
         # 附件区
         attach_section = ft.Container(visible=False)
@@ -414,6 +571,92 @@ class MailDetailView(ft.Column):
             spacing=0,
         )
 
+    # ---- 正文 + 引用 ----
+
+    def _build_body_section(self, mail: MailData) -> ft.Container:
+        """构建正文区：优先用 body_html 转文本渲染，降级到 body_text"""
+        c = self._colors
+
+        # HTML 优先：转为纯文本后展示（保留段落结构）
+        if (mail.body_html or "").strip():
+            text = _html_to_text(mail.body_html or "")
+            inner = ft.Text(text, selectable=True, no_wrap=False,
+                            size=Font.BODY, color=c.TEXT_PRIMARY)
+            return ft.Container(content=inner, padding=ft.Padding(0, 0, 0, 20))
+
+        raw = (mail.body_text or "").strip()
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        raw = re.sub(r"\n{3,}", "\n\n", raw)
+
+        main_text, quoted_text = _split_body(raw)
+
+        parts: list = []
+
+        if main_text:
+            parts.append(ft.Markdown(
+                main_text,
+                selectable=True,
+                auto_follow_links=True,
+            ))
+
+        # ── 引用内容：点击时才创建 widget（完全懒加载）──
+        if quoted_text:
+            parts.append(self._build_quote_widget(quoted_text))
+
+        inner = ft.Column(parts, spacing=16) if parts else ft.Container()
+        return ft.Container(content=inner, padding=ft.Padding(0, 0, 0, 20))
+
+    def _build_quote_widget(self, text: str) -> ft.Column:
+        """引用邮件块：点击时才创建内容 widget（完全懒加载）"""
+        c = self._colors
+        is_dark = self._is_dark
+
+        quote_bg     = "#F1F5F9" if not is_dark else "#1E293B"
+        quote_border = "#CBD5E1" if not is_dark else "#475569"
+        quote_fg     = "#64748B" if not is_dark else "#94A3B8"
+        btn_fg       = "#94A3B8" if not is_dark else "#64748B"
+
+        MAX_QUOTE = 800
+
+        quote_slot = ft.Column([], spacing=0)   # 展开时才填入内容
+        expanded   = [False]
+
+        toggle_label = ft.Text(
+            "▶  查看引用邮件",
+            size=Font.AUX,
+            color=btn_fg,
+            weight=ft.FontWeight.W_500,
+        )
+
+        def _on_toggle(e, qt=text):
+            expanded[0] = not expanded[0]
+            if expanded[0]:
+                display = qt[:MAX_QUOTE] + ("\n\n*…（内容过长已截断）*" if len(qt) > MAX_QUOTE else "")
+                quote_slot.controls = [ft.Container(
+                    content=ft.Markdown(
+                        display,
+                        selectable=True,
+                    ),
+                    padding=ft.Padding(12, 10, 12, 10),
+                    bgcolor=quote_bg,
+                    border=ft.Border(left=ft.border.BorderSide(3, quote_border)),
+                    border_radius=ft.BorderRadius(0, 4, 0, 4),
+                )]
+                toggle_label.value = "▼  收起引用"
+            else:
+                quote_slot.controls = []
+                toggle_label.value = "▶  查看引用邮件"
+            self.update()
+
+        toggle_btn = ft.Container(
+            content=toggle_label,
+            on_click=_on_toggle,
+            padding=ft.Padding(0, 6, 0, 2),
+            ink=True,
+        )
+
+        return ft.Column([toggle_btn, quote_slot], spacing=6)
+
     def _build_attachment_card(self, att) -> ft.Container:
         """附件卡片（200px 宽 + 预览图 + 文件名 + 大小）"""
         c = self._colors
@@ -421,32 +664,29 @@ class MailDetailView(ft.Column):
         if "." in att.filename:
             ext = "." + att.filename.rsplit(".", 1)[-1].lower()
 
-        preset = ATTACH_PRESETS.get(ext, ("ATTACH_XLS_GRADIENT", "FILE", "rgba(37,99,235,0.9)"))
-        grad_attr, label, text_color = preset
+        preset = ATTACH_PRESETS.get(ext, ("ATTACH_XLS_GRADIENT", "FILE", "#6B7280", "文件"))
+        grad_attr, label, text_color, size_type = preset
         gradient_colors = getattr(c, grad_attr)
-
-        # 文件类型标签
-        type_label = ext.lstrip(".").upper()[:4] if ext else "FILE"
 
         return ft.Container(
             content=ft.Column(
                 [
-                    # 预览区（100px 高）
+                    # 预览区（100px 高，渐变背景 + 类型标签）
                     ft.Container(
                         content=ft.Text(
-                            type_label,
+                            label,
                             size=16,
                             color=text_color,
                             weight=ft.FontWeight.W_700,
                         ),
-                        width=200,
-                        height=100,
+                        height=80,
                         alignment=ft.Alignment(0, 0),
                         gradient=ft.LinearGradient(
                             begin=ft.Alignment(-1, -1),
                             end=ft.Alignment(1, 1),
                             colors=gradient_colors,
                         ),
+                        expand=True,
                     ),
                     # 文件信息
                     ft.Container(
@@ -461,7 +701,7 @@ class MailDetailView(ft.Column):
                                     overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
                                 ft.Text(
-                                    f"{type_label} · {_format_size(att.size)}",
+                                    f"{size_type} · {_format_size(att.size)}",
                                     size=Font.SMALL,
                                     color=c.TEXT_PLACEHOLDER,
                                 ),
@@ -476,177 +716,23 @@ class MailDetailView(ft.Column):
             width=200,
             border_radius=Radius.CARD,
             border=ft.Border.all(1, c.BORDER),
-            ink=True,
-        )
-
-    # ---- 回复区 ----
-    def _build_reply_section(self) -> ft.Container:
-        """底部回复区（快捷操作 + 工具栏 + 输入框 + 发送按钮）"""
-        c = self._colors
-
-        def make_quick_action(label):
-            return ft.Container(
-                content=ft.Text(
-                    label,
-                    size=Font.BODY_SM,
-                    color=c.TEXT_PRIMARY,
-                ),
-                padding=ft.Padding(16, 8, 16, 8),
-                border=ft.Border.all(1, c.BORDER),
-                border_radius=Radius.CARD,
-                bgcolor=c.BG_MAIN,
-                ink=True,
-            )
-
-        quick_actions = ft.Row(
-            [
-                make_quick_action("回复"),
-                make_quick_action("全部回复"),
-                make_quick_action("转发"),
-            ],
-            spacing=4,
-        )
-
-        # 回复工具栏
-        def make_reply_btn(icon, label):
-            return ft.Container(
-                content=ft.Icon(icon, size=14, color=c.TEXT_SECONDARY),
-                tooltip=label,
-                padding=ft.Padding(6, 4, 6, 4),
-                border_radius=Radius.BUTTON,
-                ink=True,
-            )
-
-        reply_toolbar = ft.Row(
-            [
-                make_reply_btn(ft.Icons.FORMAT_BOLD, "加粗"),
-                make_reply_btn(ft.Icons.FORMAT_ITALIC, "斜体"),
-                make_reply_btn(ft.Icons.FORMAT_UNDERLINED, "下划线"),
-                make_reply_btn(ft.Icons.LIST, "列表"),
-                make_reply_btn(ft.Icons.FORMAT_LIST_NUMBERED, "有序列表"),
-                make_reply_btn(ft.Icons.LINK, "链接"),
-                make_reply_btn(ft.Icons.EMOJI_EMOTIONS_OUTLINED, "表情"),
-                ft.Container(expand=True),
-                make_reply_btn(ft.Icons.ATTACHMENT, "附件"),
-                make_reply_btn(ft.Icons.IMAGE_OUTLINED, "图片"),
-            ],
-            spacing=2,
-        )
-
-        # 回复输入框
-        reply_input = ft.Container(
-            content=ft.Text(
-                "点击此处输入回复内容... （Ctrl + Enter 发送）",
-                size=Font.BODY,
-                color=c.TEXT_PLACEHOLDER,
-            ),
-            padding=ft.Padding(16, 14, 16, 14),
-            height=60,
-            alignment=ft.Alignment(-1, -1),
-        )
-
-        # 发送按钮
-        send_btn = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.SEND, size=14, color=c.TEXT_ON_PRIMARY),
-                    ft.Text(
-                        "发送",
-                        size=Font.BODY_SM,
-                        color=c.TEXT_ON_PRIMARY,
-                        weight=ft.FontWeight.W_600,
-                    ),
-                ],
-                spacing=6,
-            ),
-            padding=ft.Padding(20, 8, 20, 8),
-            border_radius=Radius.BUTTON,
-            gradient=ft.LinearGradient(
-                begin=ft.Alignment(-1, 0),
-                end=ft.Alignment(1, 0),
-                colors=c.COMPOSE_GRADIENT,
-            ),
-            ink=True,
-        )
-
-        reply_footer = ft.Row(
-            [
-                send_btn,
-                ft.Container(expand=True),
-                ft.Container(
-                    content=ft.Text("定时", size=Font.AUX, color=c.TEXT_SECONDARY),
-                    tooltip="定时发送",
-                    padding=ft.Padding(8, 4, 8, 4),
-                    ink=True,
-                ),
-                ft.Container(
-                    content=ft.Text("草稿", size=Font.AUX, color=c.TEXT_SECONDARY),
-                    tooltip="存草稿",
-                    padding=ft.Padding(8, 4, 8, 4),
-                    ink=True,
-                ),
-                ft.Container(
-                    content=ft.Text("丢弃", size=Font.AUX, color=c.TEXT_SECONDARY),
-                    tooltip="丢弃",
-                    padding=ft.Padding(8, 4, 8, 4),
-                    ink=True,
-                ),
-            ],
-            spacing=8,
-        )
-
-        # 输入框 wrapper
-        input_wrap = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Container(
-                        content=reply_toolbar,
-                        padding=ft.Padding(12, 8, 12, 8),
-                        border=ft.Border(bottom=ft.border.BorderSide(1, c.BORDER_LIGHT)),
-                    ),
-                    reply_input,
-                    ft.Container(
-                        content=reply_footer,
-                        padding=ft.Padding(14, 10, 14, 10),
-                        border=ft.Border(top=ft.border.BorderSide(1, c.BORDER_LIGHT)),
-                        bgcolor=c.BG_REPLY,
-                    ),
-                ],
-                spacing=0,
-            ),
-            border=ft.Border.all(1, c.BORDER),
-            border_radius=Radius.CARD,
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-        )
-
-        return ft.Container(
-            content=ft.Column(
-                [quick_actions, input_wrap],
-                spacing=12,
-            ),
-            padding=ft.Padding(24, 16, 24, 20),
-            border=ft.Border(top=ft.border.BorderSide(1, c.BORDER_LIGHT)),
-            bgcolor=c.BG_REPLY,
+            ink=True,
         )
 
     # ---- 显示邮件 ----
     def show_mail(self, mail: MailData):
         """显示邮件详情"""
         self._current_mail = mail
-        c = self._colors
 
         self._empty_view.visible = False
         self._detail_view.visible = True
 
-        # 重建详情内容
+        self._content_scroll.scroll = ft.ScrollMode.AUTO
         self._content_scroll.controls.clear()
         detail_content = self._build_detail_content()
-        # 外层加 padding 28px 36px
         self._content_scroll.controls.append(
-            ft.Container(
-                content=detail_content,
-                padding=ft.Padding(36, 28, 36, 20),
-            )
+            ft.Container(content=detail_content, padding=ft.Padding(36, 28, 36, 20))
         )
 
         logger.info(f"显示邮件详情: {mail.subject}")

@@ -104,18 +104,31 @@ class ImapClient:
                 logger.error(f"选择文件夹失败: {folder}")
                 return mails
 
-            # 搜索未读邮件
+            # 1. 搜索未读邮件
+            mail_ids_set: set[bytes] = set()
             status, data = self._conn.search(None, "UNSEEN")
-            if status != "OK":
-                logger.warning("搜索未读邮件失败")
-                return mails
+            if status == "OK" and data[0]:
+                mail_ids_set.update(data[0].split())
 
-            mail_ids = data[0].split()
+            # 2. 近 7 天内 CC 给我的邮件（含已读，避免遗漏被客户端自动标读的抄送邮件）
+            try:
+                from datetime import timedelta
+                since = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
+                cc_status, cc_data = self._conn.search(
+                    None, f'CC "{self.username}" SINCE "{since}"')
+                if cc_status == "OK" and cc_data[0]:
+                    cc_ids = cc_data[0].split()
+                    mail_ids_set.update(cc_ids)
+                    logger.debug(f"CC 搜索发现 {len(cc_ids)} 封（含重叠）")
+            except Exception as ex:
+                logger.debug(f"CC 搜索跳过: {ex}")
+
+            mail_ids = sorted(mail_ids_set, key=lambda x: int(x))
             if not mail_ids:
-                logger.info("没有未读邮件")
+                logger.info("没有新邮件（UNSEEN + CC）")
                 return mails
 
-            logger.info(f"发现 {len(mail_ids)} 封未读邮件")
+            logger.info(f"发现 {len(mail_ids)} 封待处理邮件（UNSEEN + CC 近7天）")
 
             # 逐封拉取
             for mail_id in mail_ids:

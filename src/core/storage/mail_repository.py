@@ -106,6 +106,12 @@ class MailRepository:
             "SELECT category, COUNT(*) as cnt FROM mails GROUP BY category")
         return {row["category"] or "未分类": row["cnt"] for row in rows}
 
+    def mark_as_read(self, message_id: str) -> None:
+        """标记邮件为已读"""
+        self.db.execute(
+            "UPDATE mails SET is_read = 1 WHERE message_id = ?",
+            (message_id,))
+
     def count_unread(self) -> int:
         """统计未读"""
         row = self.db.query_one(
