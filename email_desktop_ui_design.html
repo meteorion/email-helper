@@ -239,6 +239,11 @@
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
   }
   .rail-item:hover {
     background: rgba(255,255,255,0.08);
@@ -423,7 +428,7 @@
   }
   .search-input {
     width: 100%;
-    padding: 8px 12px 8px 34px;
+    padding: 8px 14px;
     border: 1px solid #e5e7eb;
     border-radius: 18px;
     font-size: 12px;
@@ -574,18 +579,20 @@
     gap: 8px;
   }
   .toolbar-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
+    min-width: 32px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 15px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     color: #6b7280;
     cursor: pointer;
     transition: all 0.15s;
-    font-size: 15px;
+    font-size: 12px;
     border: none;
     background: transparent;
+    white-space: nowrap;
   }
   .toolbar-btn:hover {
     background: #eef2ff;
@@ -739,12 +746,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #3b82f6;
-    font-size: 32px;
+    color: #2563eb;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
   }
   .attachment-preview.pdf {
     background: linear-gradient(135deg, #fee2e2, #fecaca);
-    color: #ef4444;
+    color: #dc2626;
   }
   .attachment-info {
     padding: 10px 12px;
@@ -802,18 +811,20 @@
     gap: 4px;
   }
   .reply-btn {
-    width: 28px;
+    min-width: 28px;
     height: 28px;
+    padding: 0 10px;
     border-radius: 6px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     color: #6b7280;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     transition: all 0.15s;
     border: none;
     background: transparent;
+    white-space: nowrap;
   }
   .reply-btn:hover {
     background: #eef2ff;
@@ -1092,7 +1103,13 @@
   }
   .toast-demo.success { background: #065f46; }
   .toast-demo.error { background: #991b1b; }
-  .toast-icon { font-size: 16px; }
+  .toast-icon {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.25);
+  }
 
   /* ========== P2-7 统计面板 ========== */
   .stats-grid {
@@ -1380,7 +1397,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    letter-spacing: 0.5px;
     flex-shrink: 0;
   }
 
@@ -2019,10 +2039,15 @@
     border-color: #93c5fd;
   }
 
-  /* priority-flag 优先级标记 (邮件列表🔥) */
+  /* priority-flag 优先级标记 (邮件列表紧急标记) */
   .priority-flag {
-    font-size: 12px;
-    margin-right: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #dc2626;
+    background: #fee2e2;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 6px;
     flex-shrink: 0;
   }
 
@@ -2083,9 +2108,7 @@
   .ctx-item.danger { color: #dc2626; }
   .ctx-item.danger:hover { background: #fef2f2; }
   .ctx-icon {
-    width: 18px;
-    text-align: center;
-    flex-shrink: 0;
+    display: none;
   }
   .ctx-divider {
     height: 1px;
@@ -2182,9 +2205,16 @@
   }
   .ai-exec-row:hover { background: #f1f5f9; }
   .ai-exec-status {
-    font-size: 13px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
     flex-shrink: 0;
+    margin-right: 6px;
   }
+  .ai-exec-status.ok { background: #dcfce7; color: #166534; }
+  .ai-exec-status.skip { background: #f3f4f6; color: #6b7280; }
+  .ai-exec-status.branch { background: #dbeafe; color: #1e40af; }
 
   /* ========== P0 缺失类的深色模式覆盖 ========== */
   body.dark-mode .phase-tag { background: rgba(96,165,250,0.18); color: #93c5fd; }
@@ -2375,15 +2405,15 @@
 <!-- 设计规格说明 -->
 <div class="design-spec">
   <div class="spec-header">
-    <h1>📧 Email 桌面客户端 UI 设计规格</h1>
+    <h1>Email 桌面客户端 UI 设计规格</h1>
     <p>基于 Flet Framework | 现代商务风格 | 支持深浅双主题 | 四栏布局架构</p>
   </div>
 
   <div class="toggle-row">
-    <h2 style="margin:0; border:none; padding:0;">🎨 主题切换预览</h2>
-    <div class="theme-toggle">
-      <button class="theme-btn active" onclick="document.body.classList.remove('dark-mode'); document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');">☀️ 浅色模式</button>
-      <button class="theme-btn" onclick="document.body.classList.add('dark-mode'); document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');">🌙 深色模式</button>
+    <h2 style="margin:0; border:none; padding:0;">主题切换预览</h2>
+    <div class="toggle-actions">
+      <button class="theme-btn active" onclick="document.body.classList.remove('dark-mode'); document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');">浅色模式</button>
+      <button class="theme-btn" onclick="document.body.classList.add('dark-mode'); document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');">深色模式</button>
     </div>
   </div>
 
@@ -2392,7 +2422,7 @@
     <h2>1. 设计风格与设计理念</h2>
     <div class="spec-grid">
       <div class="spec-card">
-        <h4>🎯 设计原则</h4>
+        <h4>设计原则</h4>
         <ul>
           <li><strong>信息密度适中</strong>：邮件列表紧凑但不拥挤，兼顾效率与可读性</li>
           <li><strong>视觉层次清晰</strong>：通过颜色、字号、间距区分信息优先级</li>
@@ -2401,7 +2431,7 @@
         </ul>
       </div>
       <div class="spec-card">
-        <h4>📐 布局模式</h4>
+        <h4>布局模式</h4>
         <ul>
           <li><strong>四栏式布局</strong>：Rail导航 + 文件夹 + 邮件列表 + 详情</li>
           <li><strong>响应式宽度</strong>：各列可拖拽调整宽度（Flet: <code>Row</code> + 多个 <code>Container(width=...)</code>，拖拽分隔需自定义 <code>GestureDetector</code>，Flet 0.27 无内置 <code>split_col</code> 组件）</li>
@@ -2410,7 +2440,7 @@
         </ul>
       </div>
       <div class="spec-card">
-        <h4>⚡ 交互设计</h4>
+        <h4>交互设计</h4>
         <ul>
           <li><strong>即时反馈</strong>：hover/active/pressed 三态视觉变化</li>
           <li><strong>键盘优先</strong>：支持 J/K 导航，N 新邮件，R 回复</li>
@@ -2495,7 +2525,7 @@
     <h2>4. 间距系统 & 圆角规范</h2>
     <div class="spec-grid">
       <div class="spec-card">
-        <h4>📏 间距刻度 (8px Base Grid)</h4>
+        <h4>间距刻度 (8px Base Grid)</h4>
         <div class="spacing-demo">
           <div class="spacing-box" style="width:4px;height:20px;">4</div>
           <div class="spacing-box" style="width:8px;height:20px;">8</div>
@@ -2513,7 +2543,7 @@
         </ul>
       </div>
       <div class="spec-card">
-        <h4>⭕ 圆角规范</h4>
+        <h4>圆角规范</h4>
         <div class="spacing-demo" style="align-items:flex-start;">
           <div style="text-align:center;">
             <div style="width:48px;height:48px;background:#3b82f6;border-radius:4px;margin:0 auto;"></div>
@@ -2545,7 +2575,7 @@
     <h2>5. Flet 核心组件映射表</h2>
     <div class="component-showcase">
       <div class="component-card">
-        <h4>🚂 页面根容器</h4>
+        <h4>页面根容器</h4>
         <span class="flet-widget">ft.View / ft.SafeArea</span>
         <div class="component-demo" style="padding:12px; border:2px dashed #3b82f6; background:#eff6ff;">
           <div style="background:#dbeafe; padding:8px; border-radius:6px; font-size:12px; text-align:center; color:#1e40af;">
@@ -2558,7 +2588,7 @@
       </div>
 
       <div class="component-card">
-        <h4>🧭 左侧导航 Rail</h4>
+        <h4>左侧导航 Rail</h4>
         <span class="flet-widget">ft.NavigationRail</span>
         <div class="component-demo" style="padding:8px;">
           <div style="display:flex; gap:8px;">
@@ -2576,12 +2606,12 @@
       </div>
 
       <div class="component-card">
-        <h4>📂 文件夹列表</h4>
+        <h4>文件夹列表</h4>
         <span class="flet-widget">ft.ListView / ft.ListTile</span>
         <div class="component-demo">
-          <div style="background:#dbeafe; padding:8px 10px; border-radius:6px; font-size:13px; font-weight:600; color:#1d4ed8; margin-bottom:4px;">📥 收件箱 <span style="float:right;background:#3b82f6;color:white;padding:0 8px;border-radius:10px;font-size:11px;">12</span></div>
-          <div style="padding:8px 10px; font-size:13px; color:#4b5563; margin-bottom:4px;">📤 已发送</div>
-          <div style="padding:8px 10px; font-size:13px; color:#4b5563;">⭐ 星标邮件</div>
+          <div style="background:#dbeafe; padding:8px 10px; border-radius:6px; font-size:13px; font-weight:600; color:#1d4ed8; margin-bottom:4px;">收件箱 <span style="float:right;background:#3b82f6;color:white;padding:0 8px;border-radius:10px;font-size:11px;">12</span></div>
+          <div style="padding:8px 10px; font-size:13px; color:#4b5563; margin-bottom:4px;">已发送</div>
+          <div style="padding:8px 10px; font-size:13px; color:#4b5563;">星标邮件</div>
         </div>
         <p style="font-size:12px; color:#6b7280; margin-top:10px;">
           ListTile(leading=Icon, title=Text, trailing=Badge) 配合 selected 状态
@@ -2589,11 +2619,10 @@
       </div>
 
       <div class="component-card">
-        <h4>🔍 搜索框</h4>
+        <h4>搜索框</h4>
         <span class="flet-widget">ft.TextField</span>
         <div class="component-demo">
           <div style="display:flex; align-items:center; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px;">
-            <span style="color:#9ca3af; margin-right:8px;">🔍</span>
             <span style="color:#9ca3af; font-size:13px;">搜索邮件、联系人...</span>
           </div>
         </div>
@@ -2603,11 +2632,11 @@
       </div>
 
       <div class="component-card">
-        <h4>📝 撰写按钮</h4>
+        <h4>撰写按钮</h4>
         <span class="flet-widget">ft.ElevatedButton</span>
         <div class="component-demo">
           <div style="display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg,#3b82f6,#2563eb); color:white; padding:10px 18px; border-radius:10px; font-size:13px; font-weight:600; box-shadow:0 4px 12px rgba(59,130,246,.3);">
-            ✏️ 撰写邮件
+            撰写邮件
           </div>
         </div>
         <p style="font-size:12px; color:#6b7280; margin-top:10px;">
@@ -2616,7 +2645,7 @@
       </div>
 
       <div class="component-card">
-        <h4>✉️ 邮件卡片</h4>
+        <h4>邮件卡片</h4>
         <span class="flet-widget">ft.Container + ft.Column</span>
         <div class="component-demo" style="padding:0;">
           <div style="padding:12px; background:#eff6ff; border-left:3px solid #3b82f6;">
@@ -2633,15 +2662,15 @@
       </div>
 
       <div class="component-card">
-        <h4>🔘 工具栏按钮</h4>
+        <h4>工具栏按钮</h4>
         <span class="flet-widget">ft.IconButton</span>
         <div class="component-demo">
-          <div style="display:flex; gap:4px;">
-            <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#f3f4f6;">↩️</div>
-            <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;">↪️</div>
-            <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;">🗑️</div>
-            <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;">⭐</div>
-            <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;">📎</div>
+          <div style="display:flex; gap:6px;">
+            <div style="height:30px;padding:0 10px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#f3f4f6;font-size:12px;color:#6b7280;">回复</div>
+            <div style="height:30px;padding:0 10px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6b7280;">转发</div>
+            <div style="height:30px;padding:0 10px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6b7280;">删除</div>
+            <div style="height:30px;padding:0 10px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6b7280;">星标</div>
+            <div style="height:30px;padding:0 10px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6b7280;">附件</div>
           </div>
         </div>
         <p style="font-size:12px; color:#6b7280; margin-top:10px;">
@@ -2650,11 +2679,11 @@
       </div>
 
       <div class="component-card">
-        <h4>📎 附件卡片</h4>
+        <h4>附件卡片</h4>
         <span class="flet-widget">ft.Card / ft.Container</span>
         <div class="component-demo">
           <div style="width:160px; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden;">
-            <div style="height:70px;background:linear-gradient(135deg,#dbeafe,#bfdbfe);display:flex;align-items:center;justify-content:center;font-size:24px;">📄</div>
+            <div style="height:70px;background:linear-gradient(135deg,#dbeafe,#bfdbfe);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#2563eb;letter-spacing:1px;">PDF</div>
             <div style="padding:8px 10px;">
               <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">产品路线图.pdf</div>
               <div style="font-size:10px;color:#9ca3af;">2.4 MB</div>
@@ -2664,11 +2693,11 @@
       </div>
 
       <div class="component-card">
-        <h4>💬 Toast 提示</h4>
+        <h4>Toast 提示</h4>
         <span class="flet-widget">ft.SnackBar</span>
         <div class="component-demo">
           <div class="toast-demo success">
-            <span class="toast-icon">✅</span>
+            <span class="toast-icon">成功</span>
             <span>邮件发送成功</span>
           </div>
         </div>
@@ -2678,7 +2707,7 @@
       </div>
 
       <div class="component-card">
-        <h4>📋 筛选 Tab</h4>
+        <h4>筛选 Tab</h4>
         <span class="flet-widget">ft.Tabs / ft.Tab</span>
         <div class="component-demo">
           <div style="display:flex; gap:0; border-bottom:1px solid #f3f4f6;">
@@ -2691,7 +2720,7 @@
       </div>
 
       <div class="component-card">
-        <h4>📝 撰写弹窗</h4>
+        <h4>撰写弹窗</h4>
         <span class="flet-widget">ft.AlertDialog / ft.BottomSheet</span>
         <div class="component-demo">
           <div style="border:1px solid #e5e7eb; border-radius:8px; overflow:hidden;">
@@ -2707,7 +2736,7 @@
       </div>
 
       <div class="component-card">
-        <h4>🔳 复选框 & 开关</h4>
+        <h4>复选框 & 开关</h4>
         <span class="flet-widget">ft.Checkbox / ft.Switch</span>
         <div class="component-demo">
           <div style="display:flex; align-items:center; gap:20px;">
@@ -2738,32 +2767,32 @@
       <div class="spec-card" style="border-left-color:#1e3a8a;">
         <h4>Column 1: Rail 导航 (72px)</h4>
         <ul>
-          <li>📧 邮件模块 (当前)</li>
-          <li>📅 日历模块</li>
-          <li>👥 联系人</li>
-          <li>📝 任务</li>
-          <li>⚙️ 设置</li>
-          <li style="margin-top:12px;">💡 Flet Widget:</li>
+          <li>邮件模块 (当前)</li>
+          <li>日历模块</li>
+          <li>联系人</li>
+          <li>任务</li>
+          <li>设置</li>
+          <li style="margin-top:12px;">Flet Widget:</li>
           <li><code style="font-size:11px;">ft.NavigationRail</code></li>
         </ul>
       </div>
       <div class="spec-card" style="border-left-color:#3b82f6;">
         <h4>Column 2: 文件夹 (260px)</h4>
         <ul>
-          <li>✏️ 撰写按钮 (顶部)</li>
-          <li>📥 收件箱 / 草稿箱</li>
-          <li>📤 已发送 / 已删除</li>
-          <li>⭐ 星标 / 重要邮件</li>
-          <li>🏷️ 自定义标签列表</li>
-          <li>💾 存储空间 (底部)</li>
+          <li>撰写按钮 (顶部)</li>
+          <li>收件箱 / 草稿箱</li>
+          <li>已发送 / 已删除</li>
+          <li>星标 / 重要邮件</li>
+          <li>自定义标签列表</li>
+          <li>存储空间 (底部)</li>
         </ul>
       </div>
       <div class="spec-card" style="border-left-color:#60a5fa;">
         <h4>Column 3: 邮件列表 (380px)</h4>
         <ul>
-          <li>🔍 搜索框 (顶部)</li>
-          <li>📋 筛选 Tabs</li>
-          <li>✉️ 邮件卡片列表</li>
+          <li>搜索框 (顶部)</li>
+          <li>筛选 Tabs</li>
+          <li>邮件卡片列表</li>
           <li>&nbsp;&nbsp;• 发件人 / 时间</li>
           <li>&nbsp;&nbsp;• 主题 / 预览</li>
           <li>&nbsp;&nbsp;• 星标 / 标签 / 附件指示</li>
@@ -2772,12 +2801,12 @@
       <div class="spec-card" style="border-left-color:#93c5fd;">
         <h4>Column 4: 邮件详情 (Flex)</h4>
         <ul>
-          <li>🛠️ 阅读工具栏 (顶部)</li>
-          <li>📌 主题 + 标签</li>
-          <li>👤 发件人信息卡</li>
-          <li>📖 邮件正文</li>
-          <li>📎 附件卡片组</li>
-          <li>💬 快速回复区 (底部)</li>
+          <li>阅读工具栏 (顶部)</li>
+          <li>主题 + 标签</li>
+          <li>发件人信息卡</li>
+          <li>邮件正文</li>
+          <li>附件卡片组</li>
+          <li>快速回复区 (底部)</li>
         </ul>
       </div>
     </div>
@@ -2811,7 +2840,7 @@ def main(page: ft.Page):
     page.add(main_layout)</pre>
     </div>
     <div class="spec-card" style="border-left-color:#dc2626;">
-      <h4 style="color:#dc2626;">⚠️ CSS → Flet 迁移难点提示</h4>
+      <h4 style="color:#dc2626;">CSS → Flet 迁移难点提示</h4>
       <p style="font-size:13px; color:#4b5563; line-height:1.7;">
         以下 CSS 特性在 Flet 中<strong>无直接等价物</strong>，需通过事件回调或自定义绘制实现：
       </p>
@@ -2832,7 +2861,7 @@ def main(page: ft.Page):
     <h2>7. 核心交互流程 & 快捷键</h2>
     <div class="spec-grid">
       <div class="spec-card">
-        <h4>📨 查收邮件流程</h4>
+        <h4>邮件交互流程</h4>
         <ol style="padding-left:20px; font-size:14px; color:#4b5563;">
           <li>进入应用 → 默认聚焦「收件箱」</li>
           <li>未读邮件左侧显示<strong>蓝色竖条 + 粗体</strong></li>
@@ -2842,7 +2871,7 @@ def main(page: ft.Page):
         </ol>
       </div>
       <div class="spec-card">
-        <h4>✏️ 撰写邮件流程</h4>
+        <h4>撰写邮件流程</h4>
         <ol style="padding-left:20px; font-size:14px; color:#4b5563;">
           <li>点击「撰写」按钮 → 弹出撰写窗口</li>
           <li>支持：收件人联想 + 标签</li>
@@ -2852,7 +2881,7 @@ def main(page: ft.Page):
         </ol>
       </div>
       <div class="spec-card">
-        <h4>⌨️ 全局快捷键</h4>
+        <h4>全局快捷键</h4>
         <ul style="list-style:none; padding-left:0; font-size:13px;">
           <li style="padding:4px 0;"><code style="background:#e0e7ff; padding:2px 6px; border-radius:4px;">N</code> &nbsp; 撰写新邮件</li>
           <li style="padding:4px 0;"><code style="background:#e0e7ff; padding:2px 6px; border-radius:4px;">R</code> &nbsp; 回复当前邮件</li>
@@ -2870,7 +2899,7 @@ def main(page: ft.Page):
 
 <!-- ===== 原型图 ===== -->
 <div class="prototype-title">
-  <h2>🖼️ 高保真原型图 - 主界面 (浅色模式)</h2>
+  <h2>高保真原型图 - 主界面 (浅色模式)</h2>
   <p>点击「撰写邮件」按钮可预览弹窗效果</p>
 </div>
 
@@ -2879,21 +2908,21 @@ def main(page: ft.Page):
     <div class="window-dot dot-red"></div>
     <div class="window-dot dot-yellow"></div>
     <div class="window-dot dot-green"></div>
-    <div class="window-title">📧 Email Client — Flet Desktop App</div>
+    <div class="window-title">Email Client — Flet Desktop App</div>
   </div>
   <div class="app-container">
 
     <!-- Col 1: Rail -->
     <div class="nav-rail">
       <div class="rail-logo">E</div>
-      <div class="rail-item active" title="邮件">📧</div>
-      <div class="rail-item" title="日历">📅</div>
-      <div class="rail-item" title="联系人">👥</div>
-      <div class="rail-item" title="任务">✅</div>
-      <div class="rail-item" title="便签">📝</div>
+      <div class="rail-item active" title="邮件">邮件</div>
+      <div class="rail-item" title="日历">日历</div>
+      <div class="rail-item" title="联系人">联系人</div>
+      <div class="rail-item" title="任务">任务</div>
+      <div class="rail-item" title="便签">便签</div>
       <div class="rail-spacer"></div>
-      <div class="rail-item" title="帮助">❓</div>
-      <div class="rail-item" title="设置">⚙️</div>
+      <div class="rail-item" title="帮助">帮助</div>
+      <div class="rail-item" title="设置">设置</div>
       <div class="rail-avatar" title="王明">W</div>
     </div>
 
@@ -2901,33 +2930,28 @@ def main(page: ft.Page):
     <div class="folder-sidebar">
       <div class="compose-btn-wrap">
         <button class="compose-btn" onclick="document.getElementById('composeModal').classList.add('active')">
-          ✏️ <span>撰写邮件</span>
+          <span>撰写邮件</span>
         </button>
       </div>
 
       <div class="folder-section">
         <div class="folder-section-title">常用</div>
         <div class="folder-item active">
-          <div class="folder-icon">📥</div>
           <div class="folder-name">收件箱</div>
           <div class="folder-badge">12</div>
         </div>
         <div class="folder-item">
-          <div class="folder-icon">📤</div>
           <div class="folder-name">已发送</div>
         </div>
         <div class="folder-item">
-          <div class="folder-icon">📝</div>
           <div class="folder-name">草稿箱</div>
           <div class="folder-badge gray">3</div>
         </div>
         <div class="folder-item">
-          <div class="folder-icon">⭐</div>
           <div class="folder-name">星标邮件</div>
           <div class="folder-badge gray">8</div>
         </div>
         <div class="folder-item">
-          <div class="folder-icon">📌</div>
           <div class="folder-name">重要</div>
         </div>
       </div>
@@ -2935,16 +2959,13 @@ def main(page: ft.Page):
       <div class="folder-section">
         <div class="folder-section-title">管理</div>
         <div class="folder-item">
-          <div class="folder-icon">📎</div>
           <div class="folder-name">带附件</div>
           <div class="folder-badge gray">25</div>
         </div>
         <div class="folder-item">
-          <div class="folder-icon">🗑️</div>
           <div class="folder-name">已删除</div>
         </div>
         <div class="folder-item">
-          <div class="folder-icon">♻️</div>
           <div class="folder-name">垃圾箱</div>
         </div>
       </div>
@@ -2978,7 +2999,7 @@ def main(page: ft.Page):
       </div>
 
       <div class="storage-info">
-        <div class="storage-text" style="font-weight:500; color:#374151;">💾 存储空间</div>
+        <div class="storage-text" style="font-weight:500; color:#374151;">存储空间</div>
         <div class="storage-bar"><div class="storage-fill"></div></div>
         <div class="storage-text">6.8 GB / 10 GB 已使用</div>
         <div style="font-size:11px; color:#2563eb; margin-top:4px; cursor:pointer;">升级空间 →</div>
@@ -2988,10 +3009,9 @@ def main(page: ft.Page):
     <!-- Col 3: 邮件列表 -->
     <div class="email-list">
       <div class="list-header">
-        <h3>📥 收件箱</h3>
+        <h3>收件箱</h3>
         <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input type="text" class="search-input" placeholder="搜索邮件、联系人、内容..." />
+          <input type="text" class="search-input" placeholder="搜索邮件、联系人、内容..." aria-label="搜索邮件" />
         </div>
       </div>
 
@@ -3100,7 +3120,7 @@ def main(page: ft.Page):
           <div class="email-top">
             <div class="email-checkbox"></div>
             <div class="email-star">★</div>
-            <div class="email-sender">妈妈 👩</div>
+            <div class="email-sender">妈妈</div>
             <div class="email-time">7月27日</div>
           </div>
           <div class="email-subject">周末回家吃饭吗？</div>
@@ -3126,14 +3146,14 @@ def main(page: ft.Page):
     <!-- Col 4: 邮件详情 -->
     <div class="email-detail">
       <div class="detail-toolbar">
-        <button class="toolbar-btn" title="返回">←</button>
-        <button class="toolbar-btn" title="归档">📦</button>
-        <button class="toolbar-btn" title="删除">🗑️</button>
+        <button class="toolbar-btn" title="返回" aria-label="返回">←</button>
+        <button class="toolbar-btn" title="归档" aria-label="归档">归档</button>
+        <button class="toolbar-btn" title="删除" aria-label="删除">删除</button>
         <div style="width:1px; height:20px; background:#e5e7eb; margin:0 8px;"></div>
-        <button class="toolbar-btn" title="标记未读">●</button>
-        <button class="toolbar-btn" title="移动到">📂</button>
-        <button class="toolbar-btn" title="标签">🏷️</button>
-        <button class="toolbar-btn" title="更多">⋯</button>
+        <button class="toolbar-btn" title="标记未读" aria-label="标记未读">标记未读</button>
+        <button class="toolbar-btn" title="移动到" aria-label="移动到">移动到</button>
+        <button class="toolbar-btn" title="标签" aria-label="标签">标签</button>
+        <button class="toolbar-btn" title="更多" aria-label="更多">⋯</button>
 
         <div class="toolbar-spacer"></div>
 
@@ -3142,15 +3162,15 @@ def main(page: ft.Page):
           <div class="mini-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">李</div>
           <div class="mini-avatar" style="background:linear-gradient(135deg,#10b981,#34d399);">王</div>
         </div>
-        <button class="toolbar-btn" title="更多操作">⋮</button>
+        <button class="toolbar-btn" title="更多操作" aria-label="更多操作">⋮</button>
       </div>
 
       <div class="detail-content">
         <h1 class="detail-subject">Q3 产品路线图评审 - 请查收附件并反馈</h1>
         <div class="detail-tags">
-          <span class="email-tag" style="background:#fee2e2;color:#991b1b;">🔴 工作</span>
-          <span class="email-tag" style="background:#dbeafe;color:#1e40af;">🔵 项目 Alpha</span>
-          <span class="email-tag" style="background:#ede9fe;color:#6d28d9;">🟣 高优先级</span>
+          <span class="email-tag" style="background:#fee2e2;color:#991b1b;">工作</span>
+          <span class="email-tag" style="background:#dbeafe;color:#1e40af;">项目 Alpha</span>
+          <span class="email-tag" style="background:#ede9fe;color:#6d28d9;">高优先级</span>
         </div>
 
         <div class="sender-section">
@@ -3158,7 +3178,7 @@ def main(page: ft.Page):
           <div class="sender-info">
             <div class="sender-name-row">
               <span class="sender-name">产品设计团队</span>
-              <span style="font-size:11px; background:#e0e7ff; color:#1e40af; padding:2px 8px; border-radius:10px;">👥 群组</span>
+              <span style="font-size:11px; background:#e0e7ff; color:#1e40af; padding:2px 8px; border-radius:10px;">群组</span>
             </div>
             <div class="sender-email">product-design@company.com</div>
             <div class="email-meta">
@@ -3167,7 +3187,7 @@ def main(page: ft.Page):
           </div>
           <div class="detail-time">
             今天 09:32<br/>
-            <span style="font-size:11px;">📎 2 个附件</span>
+            <span style="font-size:11px;">2 个附件</span>
           </div>
         </div>
 
@@ -3175,14 +3195,14 @@ def main(page: ft.Page):
           <p>Hi 各位同事，</p>
           <p>大家好！附件是 Q3 季度产品路线图的正式版文档，本次评审会议安排如下：</p>
 
-          <h4>📅 会议信息</h4>
+          <h4>会议信息</h4>
           <ul>
             <li><strong>时间</strong>：2024 年 8 月 8 日（周四）下午 14:00 - 16:00</li>
             <li><strong>地点</strong>：总部大楼 3F - 星辰会议室</li>
             <li><strong>线上</strong>：<u>https://meeting.company.com/room/888</u></li>
           </ul>
 
-          <h4>📋 评审议程</h4>
+          <h4>评审议程</h4>
           <ul>
             <li>Q2 产品目标完成情况回顾（30 min）</li>
             <li>Q3 核心产品路线图讲解（40 min）</li>
@@ -3196,17 +3216,17 @@ def main(page: ft.Page):
         </div>
 
         <div class="attachments-section">
-          <div class="attachments-title">📎 附件 &nbsp;<span style="color:#9ca3af; font-weight:400;">(2 个文件 · 共 4.8 MB)</span></div>
+          <div class="attachments-title">附件 &nbsp;<span style="color:#9ca3af; font-weight:400;">(2 个文件 · 共 4.8 MB)</span></div>
           <div class="attachment-list">
             <div class="attachment-card">
-              <div class="attachment-preview pdf">📄</div>
+              <div class="attachment-preview pdf">PDF</div>
               <div class="attachment-info">
                 <div class="attachment-name">Q3_产品路线图_v2.0.pdf</div>
                 <div class="attachment-size">PDF · 3.2 MB</div>
               </div>
             </div>
             <div class="attachment-card">
-              <div class="attachment-preview">📊</div>
+              <div class="attachment-preview">XLS</div>
               <div class="attachment-info">
                 <div class="attachment-name">Q2_数据复盘.xlsx</div>
                 <div class="attachment-size">Excel · 1.6 MB</div>
@@ -3229,11 +3249,11 @@ def main(page: ft.Page):
             <div class="reply-btn" title="下划线"><u>U</u></div>
             <div class="reply-btn" title="列表">≡</div>
             <div class="reply-btn" title="有序列表">1.</div>
-            <div class="reply-btn" title="插入链接">🔗</div>
-            <div class="reply-btn" title="表情">😊</div>
+            <div class="reply-btn" title="插入链接">链接</div>
+            <div class="reply-btn" title="表情">表情</div>
             <div style="flex:1;"></div>
-            <div class="reply-btn" title="附件">📎</div>
-            <div class="reply-btn" title="图片">🖼️</div>
+            <div class="reply-btn" title="附件">附件</div>
+            <div class="reply-btn" title="图片">图片</div>
           </div>
           <div class="reply-body" contenteditable="true" style="outline:none;">
             点击此处输入回复内容... （<u>Ctrl + Enter</u> 发送）
@@ -3241,9 +3261,9 @@ def main(page: ft.Page):
           <div class="reply-footer">
             <button class="send-btn">发送</button>
             <div class="reply-footer-spacer"></div>
-            <div class="reply-btn" title="定时发送">🕐</div>
-            <div class="reply-btn" title="草稿">💾</div>
-            <div class="reply-btn" title="丢弃">🗑️</div>
+            <div class="reply-btn" title="定时发送">定时</div>
+            <div class="reply-btn" title="草稿">草稿</div>
+            <div class="reply-btn" title="丢弃">丢弃</div>
           </div>
         </div>
       </div>
@@ -3256,7 +3276,7 @@ def main(page: ft.Page):
 <div class="modal-overlay-demo" id="composeModal" role="dialog" aria-modal="true" aria-labelledby="composeModalTitle" onclick="if(event.target===this) this.classList.remove('active');">
   <div class="modal-demo">
     <div class="modal-header">
-      <div class="modal-title" id="composeModalTitle">✏️ 新邮件</div>
+      <div class="modal-title" id="composeModalTitle">新邮件</div>
       <button class="modal-close" aria-label="关闭" onclick="document.getElementById('composeModal').classList.remove('active')">✕</button>
     </div>
     <div class="modal-body">
@@ -3279,7 +3299,7 @@ def main(page: ft.Page):
       <div class="form-row">
         <div class="form-label">标签</div>
         <div style="display:flex; gap:6px; align-items:center;">
-          <span class="form-recipient" style="background:#fee2e2; color:#991b1b;">🔴 工作 <span style="cursor:pointer;">×</span></span>
+          <span class="form-recipient" style="background:#fee2e2; color:#991b1b;">工作 <span style="cursor:pointer;">×</span></span>
           <span style="font-size:13px; color:#2563eb; cursor:pointer;">+ 添加标签</span>
         </div>
       </div>
@@ -3292,12 +3312,12 @@ def main(page: ft.Page):
           <div class="reply-btn" role="button" tabindex="0" aria-label="无序列表">≡</div>
           <div class="reply-btn" role="button" tabindex="0" aria-label="有序列表">1.</div>
           <div class="reply-btn" role="button" tabindex="0" aria-label="引用">❝</div>
-          <div class="reply-btn" role="button" tabindex="0" aria-label="插入链接">🔗</div>
-          <div class="reply-btn" role="button" tabindex="0" aria-label="表情">😊</div>
+          <div class="reply-btn" role="button" tabindex="0" aria-label="插入链接">链接</div>
+          <div class="reply-btn" role="button" tabindex="0" aria-label="表情">表情</div>
           <div style="flex:1;"></div>
-          <div class="reply-btn" role="button" tabindex="0" aria-label="插入图片">🖼️</div>
-          <div class="reply-btn" role="button" tabindex="0" aria-label="添加附件">📎</div>
-          <div class="reply-btn" role="button" tabindex="0" aria-label="插入表格">📊</div>
+          <div class="reply-btn" role="button" tabindex="0" aria-label="插入图片">图片</div>
+          <div class="reply-btn" role="button" tabindex="0" aria-label="添加附件">附件</div>
+          <div class="reply-btn" role="button" tabindex="0" aria-label="插入表格">表格</div>
         </div>
         <div style="padding:16px 18px; min-height:180px; font-size:14px; line-height:1.8; color:#111827;">
           <p>Hi 张三、李四，</p>
@@ -3313,7 +3333,7 @@ def main(page: ft.Page):
         <div style="padding:12px 16px; background:#fafafa; border-top:1px solid #f3f4f6;">
           <div style="display:flex; gap:10px; align-items:center;">
             <div style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:#eff6ff; border:1px dashed #93c5fd; border-radius:6px; font-size:13px; color:#1e40af;">
-              📄 Q3_产品路线图_v2.0.pdf <span style="color:#9ca3af;">(3.2 MB)</span> <span style="cursor:pointer;">×</span>
+              Q3_产品路线图_v2.0.pdf <span style="color:#9ca3af;">(3.2 MB)</span> <span style="cursor:pointer;">×</span>
             </div>
             <div style="font-size:13px; color:#3b82f6; cursor:pointer;">+ 添加附件</div>
           </div>
@@ -3322,15 +3342,15 @@ def main(page: ft.Page):
     </div>
     <div class="modal-footer">
       <div class="modal-footer-left">
-        <button class="toolbar-btn" title="定时发送" aria-label="定时发送">🕐</button>
-        <button class="toolbar-btn" title="请求已读回执" aria-label="请求已读回执">👁️</button>
-        <button class="toolbar-btn" title="加密邮件" aria-label="加密邮件">🔒</button>
+        <button class="toolbar-btn" title="定时发送" aria-label="定时发送">定时发送</button>
+        <button class="toolbar-btn" title="请求已读回执" aria-label="请求已读回执">已读回执</button>
+        <button class="toolbar-btn" title="加密邮件" aria-label="加密邮件">加密</button>
       </div>
       <div class="modal-footer-right">
         <button class="btn-secondary">存草稿</button>
         <button class="btn-secondary" onclick="document.getElementById('composeModal').classList.remove('active')">取消</button>
-        <button class="btn-primary" onclick="document.getElementById('composeModal').classList.remove('active'); alert('✅ 邮件发送成功！');">
-          📤 发送 (Ctrl+Enter)
+        <button class="btn-primary" onclick="document.getElementById('composeModal').classList.remove('active'); alert('邮件发送成功！');">
+          发送 (Ctrl+Enter)
         </button>
       </div>
     </div>
@@ -3374,7 +3394,7 @@ def main(page: ft.Page):
       </div>
       <div class="spec-card">
         <h4>底部操作栏 Footer</h4>
-        <ul><li>左: 定时发送🕐/已读回执👁️/加密🔒</li><li>右: 存草稿/取消/发送(Ctrl+Enter)</li><li>发送成功 → Toast(非阻塞)</li></ul>
+        <ul><li>左: 定时发送/已读回执/加密</li><li>右: 存草稿/取消/发送(Ctrl+Enter)</li><li>发送成功 → Toast(非阻塞)</li></ul>
       </div>
     </div>
     <div class="spec-card" style="margin-top:16px;">
@@ -3397,21 +3417,20 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">📧 邮件列表增强 — 分类标签 + 置信度 + 右键菜单</div>
+    <div class="window-title">邮件列表增强 — 分类标签 + 置信度 + 右键菜单</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; overflow:hidden;">
     <div style="padding:16px 20px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between;">
-      <h3 style="font-size:18px; font-weight:600;">📥 收件箱</h3>
+      <h3 style="font-size:18px; font-weight:600;">收件箱</h3>
       <div style="display:flex; gap:8px;">
-        <div class="filter-dropdown" role="button" tabindex="0" aria-label="分类筛选">📋 全部分类 ▾</div>
-        <div class="filter-dropdown" role="button" tabindex="0" aria-label="时间筛选">⏱️ 全部时间 ▾</div>
-        <div class="filter-dropdown" role="button" tabindex="0" aria-label="附件筛选">📎 有附件</div>
+        <div class="filter-dropdown" role="button" tabindex="0" aria-label="分类筛选">全部分类 ▾</div>
+        <div class="filter-dropdown" role="button" tabindex="0" aria-label="时间筛选">全部时间 ▾</div>
+        <div class="filter-dropdown" role="button" tabindex="0" aria-label="附件筛选">有附件</div>
       </div>
     </div>
     <div style="padding:0 20px 12px;">
       <div style="position:relative;">
-        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#6b7280; font-size:14px;">🔍</span>
-        <input aria-label="搜索邮件" style="width:100%; padding:10px 14px 10px 38px; border:1px solid #e5e7eb; border-radius:8px; font-size:13px; outline:none; background:#f9fafb;" placeholder="搜索主题、发件人、正文关键词...">
+        <input aria-label="搜索邮件" style="width:100%; padding:10px 14px; border:1px solid #e5e7eb; border-radius:8px; font-size:13px; outline:none; background:#f9fafb;" placeholder="搜索主题、发件人、正文关键词...">
       </div>
     </div>
     <div style="border-top:1px solid #f3f4f6;">
@@ -3419,12 +3438,12 @@ def main(page: ft.Page):
       <div class="email-item unread" role="button" tabindex="0" aria-label="邮件: 张三 Q3预算审批申请" style="padding:14px 20px; border-bottom:1px solid #f9fafb; border-left:3px solid #3b82f6; background:#eff6ff; cursor:pointer;">
         <div style="display:flex; align-items:center; margin-bottom:6px;">
           <div style="width:16px; height:16px; border:1.5px solid #d1d5db; border-radius:4px; margin-right:12px;"></div>
-          <span class="priority-flag">🔥</span>
+          <span class="priority-flag">紧急</span>
           <span style="flex:1; font-size:14px; font-weight:700; color:#1f2937;">张三</span>
           <span style="font-size:12px; color:#2563eb; font-weight:500;">10:30</span>
         </div>
         <div style="padding-left:40px; margin-bottom:6px;">
-          <span class="cat-badge cat-approval">📋 审批</span>
+          <span class="cat-badge cat-approval">审批</span>
           <span class="conf-dot conf-high" aria-label="置信度高"></span>
           <span style="font-size:11px; color:#10b981; font-weight:500;">0.92</span>
           <span style="font-size:13px; font-weight:700; color:#1f2937; margin-left:8px;">Q3预算审批申请</span>
@@ -3432,7 +3451,7 @@ def main(page: ft.Page):
         <div style="padding-left:40px; font-size:12px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">您好，附件是 Q3 部门预算审批表，申请金额 125,000 元...</div>
         <div style="padding-left:40px; margin-top:8px; display:flex; gap:6px;">
           <span class="email-tag" style="font-size:10px; padding:2px 8px; border-radius:4px; background:#fef3c7; color:#92400e; font-weight:500;">VIP</span>
-          <span class="email-tag" style="font-size:10px; padding:2px 8px; border-radius:4px; background:#f3f4f6; color:#6b7280; font-weight:500;">📎 2</span>
+          <span class="email-tag" style="font-size:10px; padding:2px 8px; border-radius:4px; background:#f3f4f6; color:#6b7280; font-weight:500;">2 个附件</span>
         </div>
       </div>
       <!-- 邮件 2: 告警 -->
@@ -3443,7 +3462,7 @@ def main(page: ft.Page):
           <span style="font-size:12px; color:#9ca3af;">09:15</span>
         </div>
         <div style="padding-left:40px; margin-bottom:6px;">
-          <span class="cat-badge cat-alert">⚠️ 告警</span>
+          <span class="cat-badge cat-alert">告警</span>
           <span class="conf-dot conf-mid" aria-label="置信度中"></span>
           <span style="font-size:11px; color:#3b82f6; font-weight:500;">0.85</span>
           <span style="font-size:13px; font-weight:500; color:#374151; margin-left:8px;">服务器维护通知 - CPU 超过 90%</span>
@@ -3458,7 +3477,7 @@ def main(page: ft.Page):
           <span style="font-size:12px; color:#9ca3af;">昨天</span>
         </div>
         <div style="padding-left:40px; margin-bottom:6px;">
-          <span class="cat-badge cat-meeting">📅 会议</span>
+          <span class="cat-badge cat-meeting">会议</span>
           <span class="conf-dot conf-low" aria-label="置信度低"></span>
           <span style="font-size:11px; color:#f59e0b; font-weight:500;">0.62 待确认</span>
           <span style="font-size:13px; font-weight:500; color:#374151; margin-left:8px;">周一项目评审会</span>
@@ -3473,7 +3492,7 @@ def main(page: ft.Page):
           <span style="font-size:12px; color:#9ca3af;">昨天</span>
         </div>
         <div style="padding-left:40px; margin-bottom:6px;">
-          <span class="cat-badge cat-info">📰 资讯</span>
+          <span class="cat-badge cat-info">资讯</span>
           <span class="ai-source-tag ai-source-rule">规则</span>
           <span style="font-size:13px; font-weight:500; color:#374151; margin-left:8px;">研发部第 31 周周报</span>
         </div>
@@ -3482,30 +3501,30 @@ def main(page: ft.Page):
     </div>
     <!-- 右键菜单 -->
     <div style="padding:20px; background:#f8fafc; border-top:1px solid #e5e7eb;">
-      <p style="font-size:12px; color:#6b7280; margin-bottom:12px;">📎 右键菜单 (邮件项右键触发) + 修正分类对话框:</p>
+      <p style="font-size:12px; color:#6b7280; margin-bottom:12px;">右键菜单 (邮件项右键触发) + 修正分类对话框:</p>
       <div style="display:flex; gap:20px; flex-wrap:wrap;">
         <div class="context-menu">
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">📝</span> 修正分类...</div>
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">🏷️</span> 添加标签...</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 修正分类...</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 添加标签...</div>
           <div class="ctx-divider"></div>
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">✅</span> 标记已读</div>
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">⭐</span> 加星标</div>
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">📁</span> 移动到...</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 标记已读</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 加星标</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 移动到...</div>
           <div class="ctx-divider"></div>
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">↩️</span> 回复</div>
-          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">↪️</span> 转发</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 回复</div>
+          <div class="ctx-item" role="button" tabindex="0"><span class="ctx-icon">·</span> 转发</div>
           <div class="ctx-divider"></div>
-          <div class="ctx-item danger" role="button" tabindex="0"><span class="ctx-icon">🗑️</span> 删除</div>
+          <div class="ctx-item danger" role="button" tabindex="0"><span class="ctx-icon">·</span> 删除</div>
         </div>
         <div style="flex:1; min-width:260px;">
           <p style="font-size:13px; font-weight:600; color:#374151; margin-bottom:8px;">「修正分类」对话框:</p>
           <div style="border:1px solid #e5e7eb; border-radius:8px; padding:16px; background:white;">
-            <p style="font-size:12px; color:#6b7280; margin-bottom:8px;">当前分类: <span class="cat-badge cat-meeting">📅 会议</span> → 修正为:</p>
+            <p style="font-size:12px; color:#6b7280; margin-bottom:8px;">当前分类: <span class="cat-badge cat-meeting">会议</span> → 修正为:</p>
             <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
-              <span class="cat-badge cat-approval" style="cursor:pointer; padding:4px 10px;">📋 审批</span>
-              <span class="cat-badge cat-alert" style="cursor:pointer; padding:4px 10px;">⚠️ 告警</span>
-              <span class="cat-badge cat-collab" style="cursor:pointer; padding:4px 10px;">💬 协作</span>
-              <span class="cat-badge cat-notice" style="cursor:pointer; padding:4px 10px;">📌 通知</span>
+              <span class="cat-badge cat-approval" style="cursor:pointer; padding:4px 10px;">审批</span>
+              <span class="cat-badge cat-alert" style="cursor:pointer; padding:4px 10px;">告警</span>
+              <span class="cat-badge cat-collab" style="cursor:pointer; padding:4px 10px;">协作</span>
+              <span class="cat-badge cat-notice" style="cursor:pointer; padding:4px 10px;">通知</span>
             </div>
             <label for="correctReason" style="font-size:12px; color:#6b7280;">修正原因(可选):</label>
             <input id="correctReason" class="settings-input" style="width:100%; margin-bottom:12px;" placeholder="修正原因...">
@@ -3528,26 +3547,26 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">📧 邮件详情 — AISummaryCard 智能分类卡</div>
+    <div class="window-title">邮件详情 — AISummaryCard 智能分类卡</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:28px 36px;">
     <h1 style="font-size:24px; font-weight:700; color:#111827; margin-bottom:16px;">Q3 预算审批申请</h1>
     <div style="display:flex; gap:8px; margin-bottom:24px;">
-      <span class="cat-badge cat-approval" style="padding:4px 10px;">📋 审批类</span>
+      <span class="cat-badge cat-approval" style="padding:4px 10px;">审批类</span>
       <span class="email-tag" style="font-size:11px; padding:3px 10px; border-radius:4px; background:#fef3c7; color:#92400e; font-weight:500;">VIP</span>
     </div>
     <!-- AISummaryCard -->
     <div class="ai-card">
       <!-- 分区 1: AI 智能分类 -->
       <div class="ai-card-section">
-        <div class="ai-card-title">🤖 AI 智能分类</div>
+        <div class="ai-card-title">AI 智能分类</div>
         <div class="ai-card-row" style="margin-bottom:10px;">
           <span class="ai-card-label">分类:</span>
-          <span class="cat-badge cat-approval" style="padding:3px 10px;">📋 审批类</span>
+          <span class="cat-badge cat-approval" style="padding:3px 10px;">审批类</span>
           <span class="ai-card-label" style="margin-left:12px;">优先级:</span>
-          <span class="ai-card-value">🔥 紧急</span>
+          <span class="ai-card-value">紧急</span>
           <span class="ai-card-label" style="margin-left:12px;">需回复:</span>
-          <span class="ai-card-value">✅ 是</span>
+          <span class="ai-card-value">是</span>
         </div>
         <div class="ai-card-row" style="margin-bottom:10px;">
           <span class="ai-card-label">置信度:</span>
@@ -3565,31 +3584,31 @@ def main(page: ft.Page):
       </div>
       <!-- 分区 2: AI 摘要 -->
       <div class="ai-card-section">
-        <div class="ai-card-title">📝 AI 摘要</div>
+        <div class="ai-card-title">AI 摘要</div>
         <div style="font-size:13px; color:#374151; line-height:1.7; padding:10px 14px; background:#f9fafb; border-radius:8px;">
           Q3 部门预算审批邮件，申请金额 <strong>125,000 元</strong>，用于研发部 Q3 人员扩充及设备采购。附件含 budget_q3.xlsx。需在 <strong>8 月 10 日前</strong> 完成审批回复。
         </div>
       </div>
       <!-- 分区 3: 执行流程 -->
       <div class="ai-card-section">
-        <div class="ai-card-title">⚙️ 执行流程</div>
-        <div class="ai-exec-row"><span class="ai-exec-status">✅</span> <span style="color:#374151;">approval_handler v1.1</span> <span style="color:#10b981; font-weight:500;">(成功)</span> <span style="color:#9ca3af;">耗时: 2.3s</span> <button class="ai-btn" style="margin-left:auto; padding:3px 10px; font-size:11px;">详情</button></div>
-        <div class="ai-exec-row"><span class="ai-exec-status">⏭️</span> <span style="color:#374151;">alert_handler v1.0</span> <span style="color:#9ca3af; font-weight:500;">(跳过 - trigger 条件不满足)</span></div>
-        <div class="ai-exec-row"><span class="ai-exec-status">✅</span> <span style="color:#374151;">default_handler v1.0</span> <span style="color:#10b981; font-weight:500;">(成功)</span> <span style="color:#9ca3af;">耗时: 0.8s</span> <button class="ai-btn" style="margin-left:auto; padding:3px 10px; font-size:11px;">详情</button></div>
+        <div class="ai-card-title">执行流程</div>
+        <div class="ai-exec-row"><span class="ai-exec-status ok">成功</span> <span style="color:#374151;">approval_handler v1.1</span> <span style="color:#10b981; font-weight:500;">(成功)</span> <span style="color:#9ca3af;">耗时: 2.3s</span> <button class="ai-btn" style="margin-left:auto; padding:3px 10px; font-size:11px;">详情</button></div>
+        <div class="ai-exec-row"><span class="ai-exec-status skip">跳过</span> <span style="color:#374151;">alert_handler v1.0</span> <span style="color:#9ca3af; font-weight:500;">(跳过 - trigger 条件不满足)</span></div>
+        <div class="ai-exec-row"><span class="ai-exec-status ok">成功</span> <span style="color:#374151;">default_handler v1.0</span> <span style="color:#10b981; font-weight:500;">(成功)</span> <span style="color:#9ca3af;">耗时: 0.8s</span> <button class="ai-btn" style="margin-left:auto; padding:3px 10px; font-size:11px;">详情</button></div>
       </div>
     </div>
     <!-- 流程执行详情 -->
     <div style="margin-top:16px; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden;">
       <div style="padding:12px 18px; background:#f8fafc; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-size:14px; font-weight:600; color:#111827;">⚙️ approval_handler v1.1 — 执行详情</span>
-        <span style="font-size:12px; color:#10b981;">✅ 成功 · 总耗时 2.3s</span>
+        <span style="font-size:14px; font-weight:600; color:#111827;">approval_handler v1.1 — 执行详情</span>
+        <span style="font-size:12px; color:#10b981;">成功 · 总耗时 2.3s</span>
       </div>
       <div style="padding:16px 18px;">
-        <div class="ai-exec-row"><span class="ai-exec-status">✅</span> <strong>step1:</strong> extract_info — 提取金额=125000, 日期=08-10 <span style="color:#9ca3af; margin-left:auto;">0.3s</span></div>
-        <div class="ai-exec-row"><span class="ai-exec-status">✅</span> <strong>step2:</strong> check_duplicate — 无重复 <span style="color:#9ca3af; margin-left:auto;">0.1s</span></div>
-        <div class="ai-exec-row"><span class="ai-exec-status">➡️</span> <strong>step3:</strong> 条件分支 — 金额&gt;10万 → 走高额审批分支 <span style="color:#9ca3af; margin-left:auto;">0.0s</span></div>
-        <div class="ai-exec-row"><span class="ai-exec-status">✅</span> <strong>step4_high:</strong> notify — 企微通知发送至审批群 <span style="color:#9ca3af; margin-left:auto;">1.5s</span></div>
-        <div class="ai-exec-row"><span class="ai-exec-status">✅</span> <strong>step5_high:</strong> save_record — 记录已保存 <span style="color:#9ca3af; margin-left:auto;">0.4s</span></div>
+        <div class="ai-exec-row"><span class="ai-exec-status ok">成功</span> <strong>step1:</strong> extract_info — 提取金额=125000, 日期=08-10 <span style="color:#9ca3af; margin-left:auto;">0.3s</span></div>
+        <div class="ai-exec-row"><span class="ai-exec-status ok">成功</span> <strong>step2:</strong> check_duplicate — 无重复 <span style="color:#9ca3af; margin-left:auto;">0.1s</span></div>
+        <div class="ai-exec-row"><span class="ai-exec-status branch">分支</span> <strong>step3:</strong> 条件分支 — 金额&gt;10万 → 走高额审批分支 <span style="color:#9ca3af; margin-left:auto;">0.0s</span></div>
+        <div class="ai-exec-row"><span class="ai-exec-status ok">成功</span> <strong>step4_high:</strong> notify — 企微通知发送至审批群 <span style="color:#9ca3af; margin-left:auto;">1.5s</span></div>
+        <div class="ai-exec-row"><span class="ai-exec-status ok">成功</span> <strong>step5_high:</strong> save_record — 记录已保存 <span style="color:#9ca3af; margin-left:auto;">0.4s</span></div>
       </div>
     </div>
   </div>
@@ -3603,12 +3622,12 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">🤖 AI 设置 — 分类引擎配置</div>
+    <div class="window-title">AI 设置 — 分类引擎配置</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:24px 28px;">
     <!-- 卡片1: 分类模式 -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>🎯 分类模式</h3></div>
+      <div class="ai-settings-header"><h3>分类模式</h3></div>
       <div class="ai-settings-body">
         <div class="ai-settings-row">
           <div class="ai-settings-label">运行模式:</div>
@@ -3636,7 +3655,7 @@ def main(page: ft.Page):
     </div>
     <!-- 卡片2: AI 服务商 -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>🔌 AI 服务商</h3></div>
+      <div class="ai-settings-header"><h3>AI 服务商</h3></div>
       <div class="ai-settings-body">
         <div class="ai-provider-card active">
           <div class="ai-provider-icon">DS</div>
@@ -3678,7 +3697,7 @@ def main(page: ft.Page):
     </div>
     <!-- 卡片3: 置信度阈值 -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>📊 置信度阈值</h3></div>
+      <div class="ai-settings-header"><h3>置信度阈值</h3></div>
       <div class="ai-settings-body">
         <div class="ai-settings-row">
           <div class="ai-settings-label">自动确认阈值:</div>
@@ -3710,7 +3729,7 @@ def main(page: ft.Page):
     </div>
     <!-- 卡片4: Prompt -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>📝 Prompt 自定义</h3></div>
+      <div class="ai-settings-header"><h3>Prompt 自定义</h3></div>
       <div class="ai-settings-body">
         <textarea class="yaml-editor" style="min-height:160px; border:1px solid #e5e7eb; border-radius:8px;" aria-label="系统 Prompt">你是一个专业的邮件分类助手，专注于企业微信邮件场景。
 
@@ -3743,38 +3762,38 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">⚙️ 通用设置</div>
+    <div class="window-title">通用设置</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:0;">
     <div class="settings-layout">
       <!-- 左侧导航 -->
       <div class="settings-nav">
-        <div class="settings-nav-item">📧 账户管理</div>
-        <div class="settings-nav-item">🔔 通知设置</div>
-        <div class="settings-nav-item active">🎨 外观主题</div>
-        <div class="settings-nav-item">⌨️ 快捷键</div>
-        <div class="settings-nav-item">🌐 语言区域</div>
-        <div class="settings-nav-item">🔒 隐私安全</div>
-        <div class="settings-nav-item">💾 数据备份</div>
-        <div class="settings-nav-item">ℹ️ 关于</div>
+        <div class="settings-nav-item">账户管理</div>
+        <div class="settings-nav-item">通知设置</div>
+        <div class="settings-nav-item active">外观主题</div>
+        <div class="settings-nav-item">快捷键</div>
+        <div class="settings-nav-item">语言区域</div>
+        <div class="settings-nav-item">隐私安全</div>
+        <div class="settings-nav-item">数据备份</div>
+        <div class="settings-nav-item">关于</div>
       </div>
       <!-- 右侧内容 -->
       <div class="settings-content">
-        <h2>🎨 外观主题</h2>
+        <h2>外观主题</h2>
         <div class="settings-form-row">
           <div class="settings-form-label">主题模式:</div>
           <div style="flex:1; display:flex; gap:12px;">
             <div style="border:2px solid #3b82f6; border-radius:8px; padding:8px; cursor:pointer; width:120px; background:white;">
               <div style="height:60px; background:linear-gradient(135deg,#f8fafc,#dbeafe); border-radius:4px; margin-bottom:6px;"></div>
-              <div style="font-size:12px; text-align:center; color:#1f2937;">☀️ 浅色</div>
+              <div style="font-size:12px; text-align:center; color:#1f2937;">浅色</div>
             </div>
             <div style="border:1px solid #e5e7eb; border-radius:8px; padding:8px; cursor:pointer; width:120px; background:white;">
               <div style="height:60px; background:linear-gradient(135deg,#0f172a,#1e3a8a); border-radius:4px; margin-bottom:6px;"></div>
-              <div style="font-size:12px; text-align:center; color:#1f2937;">🌙 深色</div>
+              <div style="font-size:12px; text-align:center; color:#1f2937;">深色</div>
             </div>
             <div style="border:1px solid #e5e7eb; border-radius:8px; padding:8px; cursor:pointer; width:120px; background:white;">
               <div style="height:60px; background:linear-gradient(135deg,#f8fafc 50%, #0f172a 50%); border-radius:4px; margin-bottom:6px;"></div>
-              <div style="font-size:12px; text-align:center; color:#1f2937;">🌓 跟随系统</div>
+              <div style="font-size:12px; text-align:center; color:#1f2937;">跟随系统</div>
             </div>
           </div>
         </div>
@@ -3829,7 +3848,7 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">👥 联系人</div>
+    <div class="window-title">联系人</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:0;">
     <div class="contacts-layout">
@@ -3837,7 +3856,6 @@ def main(page: ft.Page):
       <div class="contacts-list-panel">
         <div class="contacts-search">
           <div class="search-box">
-            <span class="search-icon" aria-hidden="true">🔍</span>
             <input type="text" id="contact-search-input" class="search-input" placeholder="搜索联系人..." aria-label="搜索联系人">
           </div>
         </div>
@@ -3890,7 +3908,7 @@ def main(page: ft.Page):
             <div class="contact-detail-name">Linda Liu</div>
             <div class="contact-detail-email">linda.liu@company.com</div>
             <div style="margin-top:8px; display:flex; gap:6px;">
-              <span class="email-tag" style="background:#dbeafe; color:#1e40af;">⭐ VIP</span>
+              <span class="email-tag" style="background:#dbeafe; color:#1e40af;">VIP</span>
               <span class="email-tag" style="background:#dcfce7; color:#166534;">同事</span>
               <span class="email-tag" style="background:#fef3c7; color:#92400e;">研发部</span>
             </div>
@@ -3975,31 +3993,27 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">📊 统计面板</div>
+    <div class="window-title">统计面板</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:24px;">
     <!-- 统计卡片 -->
     <div class="stats-grid">
       <div class="stat-card accent-blue">
-        <div class="stat-icon">📥</div>
         <div class="stat-label">今日收到</div>
         <div class="stat-value">42</div>
         <div class="stat-delta up">↑ 12% vs 昨日</div>
       </div>
       <div class="stat-card accent-green">
-        <div class="stat-icon">✅</div>
         <div class="stat-label">已处理</div>
         <div class="stat-value">38</div>
         <div class="stat-delta up">↑ 8%</div>
       </div>
       <div class="stat-card accent-orange">
-        <div class="stat-icon">⏳</div>
         <div class="stat-label">待人工</div>
         <div class="stat-value">4</div>
         <div class="stat-delta down">↓ 2 vs 昨日</div>
       </div>
       <div class="stat-card accent-purple">
-        <div class="stat-icon">🤖</div>
         <div class="stat-label">AI 准确率</div>
         <div class="stat-value">94.2%</div>
         <div class="stat-delta up">↑ 1.5%</div>
@@ -4008,7 +4022,7 @@ def main(page: ft.Page):
     <!-- 分类分布 -->
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
       <div>
-        <div class="stats-section-title">📋 分类分布 (今日)</div>
+        <div class="stats-section-title">分类分布 (今日)</div>
         <div class="dist-bar-row">
           <div class="dist-label">协作类</div>
           <div class="dist-track"><div class="dist-fill" style="width:35%; background:#3b82f6;">35%</div></div>
@@ -4041,7 +4055,7 @@ def main(page: ft.Page):
         </div>
       </div>
       <div>
-        <div class="stats-section-title">📈 7 日邮件趋势</div>
+        <div class="stats-section-title">7 日邮件趋势</div>
         <div class="trend-chart">
           <div class="trend-bar" style="height:60%;"><span class="trend-val">28</span></div>
           <div class="trend-bar" style="height:75%;"><span class="trend-val">35</span></div>
@@ -4065,7 +4079,7 @@ def main(page: ft.Page):
     <!-- 处理效率与通知统计 -->
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:24px;">
       <div style="background:#f8fafc; border-radius:12px; padding:16px;">
-        <div class="stats-section-title" style="margin-top:0;">⚡ 处理效率</div>
+        <div class="stats-section-title" style="margin-top:0;">处理效率</div>
         <div class="dist-bar-row">
           <div class="dist-label">规则命中</div>
           <div class="dist-track"><div class="dist-fill" style="width:62%; background:#10b981;">62%</div></div>
@@ -4084,7 +4098,7 @@ def main(page: ft.Page):
         <p style="font-size:11px; color:#6b7280; margin-top:8px;">平均处理耗时: <strong style="color:#1e40af;">1.2s/封</strong> · AI 节省时间: <strong style="color:#10b981;">约 3.5 小时/日</strong></p>
       </div>
       <div style="background:#f8fafc; border-radius:12px; padding:16px;">
-        <div class="stats-section-title" style="margin-top:0;">🔔 通知统计</div>
+        <div class="stats-section-title" style="margin-top:0;">通知统计</div>
         <div class="dist-bar-row">
           <div class="dist-label">企微推送</div>
           <div class="dist-track"><div class="dist-fill" style="width:75%; background:#3b82f6;">75%</div></div>
@@ -4114,14 +4128,14 @@ def main(page: ft.Page):
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">⚙️ 流程管理 — Workflow YAML Editor</div>
+    <div class="window-title">流程管理 — Workflow YAML Editor</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:0;">
     <div class="workflow-layout">
       <!-- 左侧流程列表 -->
       <div class="wf-list-panel">
         <div class="wf-list-header">
-          <span style="font-size:14px; font-weight:600; color:#1e3a8a;">📋 流程列表 (5)</span>
+          <span style="font-size:14px; font-weight:600; color:#1e3a8a;">流程列表 (5)</span>
           <button class="ai-btn ai-btn-primary" style="padding:4px 10px; font-size:12px;">+ 新建</button>
         </div>
         <div class="wf-item active">
@@ -4154,7 +4168,7 @@ def main(page: ft.Page):
       <div class="wf-editor-panel">
         <div class="wf-editor-header">
           <span style="font-size:15px; font-weight:600; color:#1f2937;">approval_handler <span style="color:#9ca3af; font-weight:400; font-size:12px;">v1.1</span></span>
-          <span class="yaml-syntax-ok" style="margin-left:12px;">✅ 语法正确</span>
+          <span class="yaml-syntax-ok" style="margin-left:12px;">语法正确</span>
           <div style="flex:1;"></div>
           <label style="font-size:12px; color:#6b7280; display:flex; align-items:center; gap:6px;">
             <div class="settings-toggle on" role="switch" aria-checked="true" aria-label="启用流程"></div> 启用
@@ -4206,8 +4220,8 @@ steps:
     params:
       table: approval_records</textarea>
         <div style="padding:10px 16px; border-top:1px solid #e5e7eb; background:#f8fafc; display:flex; justify-content:space-between; font-size:12px; color:#6b7280;">
-          <span>📍 5 步骤 · 📅 修改: 2026-08-03 14:23 · 👤 admin</span>
-          <span style="color:#10b981;">✅ 上次执行成功 (2.3s)</span>
+          <span>5 步骤 · 修改: 2026-08-03 14:23 · admin</span>
+          <span style="color:#10b981;">上次执行成功 (2.3s)</span>
         </div>
       </div>
     </div>
@@ -4222,35 +4236,35 @@ steps:
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">📝 模板管理 — Template Editor</div>
+    <div class="window-title">模板管理 — Template Editor</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:0;">
     <div class="template-layout">
       <!-- 左侧模板列表 -->
       <div class="wf-list-panel">
         <div class="wf-list-header">
-          <span style="font-size:14px; font-weight:600; color:#1e3a8a;">📝 模板 (8)</span>
+          <span style="font-size:14px; font-weight:600; color:#1e3a8a;">模板 (8)</span>
           <button class="ai-btn ai-btn-primary" style="padding:4px 10px; font-size:12px;">+ 新建</button>
         </div>
         <div class="tpl-item active">
           <div class="tpl-name">审批通过通知</div>
-          <div class="tpl-type">📋 审批类 · 使用 23 次</div>
+          <div class="tpl-type">审批类 · 使用 23 次</div>
         </div>
         <div class="tpl-item">
           <div class="tpl-name">会议确认回复</div>
-          <div class="tpl-type">📅 会议类 · 使用 15 次</div>
+          <div class="tpl-type">会议类 · 使用 15 次</div>
         </div>
         <div class="tpl-item">
           <div class="tpl-name">告警已收到</div>
-          <div class="tpl-type">🚨 告警类 · 使用 42 次</div>
+          <div class="tpl-type">告警类 · 使用 42 次</div>
         </div>
         <div class="tpl-item">
           <div class="tpl-name">协作延期通知</div>
-          <div class="tpl-type">💬 协作类 · 使用 8 次</div>
+          <div class="tpl-type">协作类 · 使用 8 次</div>
         </div>
         <div class="tpl-item">
           <div class="tpl-name">资讯自动归档</div>
-          <div class="tpl-type">📰 资讯类 · 使用 56 次</div>
+          <div class="tpl-type">资讯类 · 使用 56 次</div>
         </div>
       </div>
       <!-- 右侧编辑器 -->
@@ -4258,9 +4272,9 @@ steps:
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
           <input type="text" class="settings-form-input" value="审批通过通知" style="font-size:15px; font-weight:600; flex:1;" aria-label="模板名称">
           <select class="settings-form-input" style="width:120px;" aria-label="模板类型">
-            <option>📋 审批类</option>
-            <option>📅 会议类</option>
-            <option>💬 协作类</option>
+            <option>审批类</option>
+            <option>会议类</option>
+            <option>协作类</option>
           </select>
           <button class="ai-btn ai-btn-primary">保存</button>
         </div>
@@ -4285,7 +4299,7 @@ steps:
 {department} 自动化助手</textarea>
         <!-- 预览 -->
         <div>
-          <div style="font-size:12px; color:#6b7280; margin-bottom:6px;">📱 预览:</div>
+          <div style="font-size:12px; color:#6b7280; margin-bottom:6px;">预览:</div>
           <div class="preview-box">
             尊敬的 <strong style="color:#1e40af;">Alice Wang</strong>：<br><br>
             您提交的「<strong>Q3 预算审批申请</strong>」审批申请（金额: <strong style="color:#dc2626;">125,000 元</strong>）已于 <strong>2026-08-04 10:30</strong> 由 <strong>张经理</strong> 审批通过。<br><br>
@@ -4307,12 +4321,12 @@ steps:
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">🔔 通知配置</div>
+    <div class="window-title">通知配置</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:24px;">
     <!-- 渠道列表 -->
     <div class="channel-card">
-      <div class="channel-icon" style="background:linear-gradient(135deg,#07c160,#10b981);">💬</div>
+      <div class="channel-icon" style="background:linear-gradient(135deg,#07c160,#10b981);">企微</div>
       <div style="flex:1;">
         <div style="font-size:14px; font-weight:600; color:#1f2937;">企业微信</div>
         <div style="font-size:12px; color:#6b7280;">Webhook: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx · 群: 研发通知群</div>
@@ -4322,7 +4336,7 @@ steps:
       <button class="ai-btn">编辑</button>
     </div>
     <div class="channel-card">
-      <div class="channel-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa);">📧</div>
+      <div class="channel-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa);">邮件</div>
       <div style="flex:1;">
         <div style="font-size:14px; font-weight:600; color:#1f2937;">邮件转发</div>
         <div style="font-size:12px; color:#6b7280;">转发至: manager@company.com, alert@company.com</div>
@@ -4332,7 +4346,7 @@ steps:
       <button class="ai-btn">编辑</button>
     </div>
     <div class="channel-card">
-      <div class="channel-icon" style="background:linear-gradient(135deg,#f59e0b,#fb923c);">🔗</div>
+      <div class="channel-icon" style="background:linear-gradient(135deg,#f59e0b,#fb923c);">Hook</div>
       <div style="flex:1;">
         <div style="font-size:14px; font-weight:600; color:#1f2937;">Webhook</div>
         <div style="font-size:12px; color:#6b7280;">POST https://hooks.internal.com/mail-notify · 含签名校验</div>
@@ -4342,7 +4356,7 @@ steps:
       <button class="ai-btn">编辑</button>
     </div>
     <div class="channel-card">
-      <div class="channel-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa);">📱</div>
+      <div class="channel-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa);">钉钉</div>
       <div style="flex:1;">
         <div style="font-size:14px; font-weight:600; color:#1f2937;">钉钉机器人</div>
         <div style="font-size:12px; color:#6b7280;">未配置</div>
@@ -4353,13 +4367,13 @@ steps:
 
     <!-- 通知规则 -->
     <div style="margin-top:20px; padding:16px; background:#f8fafc; border-radius:8px;">
-      <div class="stats-section-title" style="margin-top:0;">📋 通知规则</div>
+      <div class="stats-section-title" style="margin-top:0;">通知规则</div>
       <div class="settings-form-row">
         <div class="settings-form-label">触发分类:</div>
         <div style="flex:1; display:flex; flex-wrap:wrap; gap:6px;">
-          <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:4px 10px;">📋 审批类</span>
-          <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:4px 10px;">🚨 告警类</span>
-          <span class="email-tag" style="background:#dbeafe; color:#1e40af; padding:4px 10px;">💬 协作类(紧急)</span>
+          <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:4px 10px;">审批类</span>
+          <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:4px 10px;">告警类</span>
+          <span class="email-tag" style="background:#dbeafe; color:#1e40af; padding:4px 10px;">协作类(紧急)</span>
         </div>
       </div>
       <div class="settings-form-row">
@@ -4390,12 +4404,12 @@ steps:
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">⏰ 调度配置 — Scheduler</div>
+    <div class="window-title">调度配置 — Scheduler</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:24px;">
     <!-- 拉取模式 -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>📡 拉取模式</h3></div>
+      <div class="ai-settings-header"><h3>拉取模式</h3></div>
       <div class="ai-settings-body">
         <div class="ai-settings-row">
           <div class="ai-settings-label">模式选择:</div>
@@ -4427,7 +4441,7 @@ steps:
 
     <!-- Cron 调度 -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>⏰ Cron 调度</h3></div>
+      <div class="ai-settings-header"><h3>Cron 调度</h3></div>
       <div class="ai-settings-body">
         <div class="ai-settings-row">
           <div class="ai-settings-label">调度类型:</div>
@@ -4462,26 +4476,26 @@ steps:
           <input type="text" class="settings-form-input" value="0 9 * * 1-5" style="font-family:monospace; flex:1;" aria-label="Cron 表达式">
         </div>
         <div class="cron-preview">
-          📅 下次执行: <strong>2026-08-05 09:00:00 (周三)</strong> · 工作日每天 9:00 拉取邮件
+          下次执行: <strong>2026-08-05 09:00:00 (周三)</strong> · 工作日每天 9:00 拉取邮件
         </div>
       </div>
     </div>
 
     <!-- 多账户调度 -->
     <div class="ai-settings-card">
-      <div class="ai-settings-header"><h3>👥 多账户独立调度</h3></div>
+      <div class="ai-settings-header"><h3>多账户独立调度</h3></div>
       <div class="ai-settings-body">
         <div style="border:1px solid #e5e7eb; border-radius:8px; overflow:hidden;">
           <div style="padding:10px 14px; background:#f8fafc; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:13px; font-weight:500; color:#1f2937;">📧 user@company.com</span>
+            <span style="font-size:13px; font-weight:500; color:#1f2937;">user@company.com</span>
             <span style="font-size:11px; color:#10b981;">● IDLE 模式 · 运行中</span>
           </div>
           <div style="padding:10px 14px; background:#f8fafc; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:13px; font-weight:500; color:#1f2937;">📧 backup@company.com</span>
+            <span style="font-size:13px; font-weight:500; color:#1f2937;">backup@company.com</span>
             <span style="font-size:11px; color:#3b82f6;">● 轮询 10min · 运行中</span>
           </div>
           <div style="padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:13px; font-weight:500; color:#9ca3af;">📧 personal@gmail.com</span>
+            <span style="font-size:13px; font-weight:500; color:#9ca3af;">personal@gmail.com</span>
             <span style="font-size:11px; color:#9ca3af;">○ 已暂停</span>
           </div>
         </div>
@@ -4498,7 +4512,7 @@ steps:
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">📜 运行日志 — Runtime Logs</div>
+    <div class="window-title">运行日志 — Runtime Logs</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:0;">
     <!-- 工具栏 -->
@@ -4517,7 +4531,7 @@ steps:
         <option>workflow</option>
         <option>notifier</option>
       </select>
-      <input type="text" class="settings-form-input" style="flex:1; min-width:200px;" placeholder="🔍 关键字搜索..." aria-label="关键字搜索">
+      <input type="text" class="settings-form-input" style="flex:1; min-width:200px;" placeholder="关键字搜索..." aria-label="关键字搜索">
       <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:#6b7280;">
         <input type="checkbox" checked> 自动滚动
       </label>
@@ -4603,7 +4617,7 @@ steps:
         <span class="log-time">2026-08-04 10:24:17.789</span>
         <span class="log-level INFO">INFO</span>
         <span class="log-module">workflow</span>
-        <span class="log-msg">[exec-001] approval_handler 执行完成: ✅ 成功 · 总耗时 2.3s</span>
+        <span class="log-msg">[exec-001] approval_handler 执行完成: 成功 · 总耗时 2.3s</span>
       </div>
     </div>
   </div>
@@ -4617,14 +4631,14 @@ steps:
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">⚙️ Worker 进度反馈</div>
+    <div class="window-title">Worker 进度反馈</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:24px;">
     <!-- 任务1: 邮件拉取 -->
     <div class="worker-progress">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:10px;">
-          <div class="channel-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa); width:32px; height:32px;">📥</div>
+          <div class="channel-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa); width:32px; height:32px; font-weight:600;">邮</div>
           <div>
             <div style="font-size:13px; font-weight:600; color:#1f2937;">邮件拉取中 (user@company.com)</div>
             <div style="font-size:11px; color:#6b7280;">已下载 28/42 · 速度 1.2 MB/s</div>
@@ -4644,7 +4658,7 @@ steps:
     <div class="worker-progress">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:10px;">
-          <div class="channel-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa); width:32px; height:32px;">🤖</div>
+          <div class="channel-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa); width:32px; height:32px; font-weight:600;">AI</div>
           <div>
             <div style="font-size:13px; font-weight:600; color:#1f2937;">AI 批量分类 (DeepSeek)</div>
             <div style="font-size:11px; color:#6b7280;">已分类 15/28 · 平均 1.2s/封</div>
@@ -4664,7 +4678,7 @@ steps:
     <div class="worker-progress">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:10px;">
-          <div class="channel-icon" style="background:linear-gradient(135deg,#10b981,#34d399); width:32px; height:32px;">📎</div>
+          <div class="channel-icon" style="background:linear-gradient(135deg,#10b981,#34d399); width:32px; height:32px; font-weight:600;">件</div>
           <div>
             <div style="font-size:13px; font-weight:600; color:#1f2937;">附件下载 (3 个文件)</div>
             <div style="font-size:11px; color:#6b7280;">budget_q3.xlsx · 2.3MB / 8MB</div>
@@ -4687,7 +4701,7 @@ steps:
           <div class="channel-icon" style="background:linear-gradient(135deg,#10b981,#34d399); width:32px; height:32px;">✓</div>
           <div>
             <div style="font-size:13px; font-weight:600; color:#166534;">流程执行完成 approval_handler</div>
-            <div style="font-size:11px; color:#16a34a;">✅ 5 步骤全部成功 · 总耗时 2.3s</div>
+            <div style="font-size:11px; color:#16a34a;">5 步骤全部成功 · 总耗时 2.3s</div>
           </div>
         </div>
         <button class="ai-btn">查看日志</button>
@@ -4700,7 +4714,7 @@ steps:
           <div class="channel-icon" style="background:linear-gradient(135deg,#ef4444,#f87171); width:32px; height:32px;">!</div>
           <div>
             <div style="font-size:13px; font-weight:600; color:#991b1b;">Webhook 通知失败</div>
-            <div style="font-size:11px; color:#dc2626;">❌ HTTP 502 Bad Gateway · 已重试 3/3</div>
+            <div style="font-size:11px; color:#dc2626;">HTTP 502 Bad Gateway · 已重试 3/3</div>
           </div>
         </div>
         <button class="ai-btn">重试</button>
@@ -4717,23 +4731,23 @@ steps:
 <div class="app-window">
   <div class="window-frame">
     <div class="window-dot dot-red"></div><div class="window-dot dot-yellow"></div><div class="window-dot dot-green"></div>
-    <div class="window-title">📎 附件下载分级</div>
+    <div class="window-title">附件下载分级</div>
   </div>
   <div style="background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; padding:24px;">
     <!-- 分级策略说明 -->
     <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 16px; margin-bottom:20px; font-size:12px; color:#1e40af;">
-      📋 <strong>分级策略:</strong> &lt;5MB 自动下载 · 5-50MB 手动下载 · &gt;50MB 警告确认 · &gt;200MB 拒绝下载 (仅记录元信息)
+      <strong>分级策略:</strong> &lt;5MB 自动下载 · 5-50MB 手动下载 · &gt;50MB 警告确认 · &gt;200MB 拒绝下载 (仅记录元信息)
     </div>
 
     <!-- 附件1: 小文件 - 自动下载 -->
     <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="channel-icon" style="background:#dcfce7; color:#166534; width:40px; height:40px; font-size:20px;">📄</div>
+        <div class="channel-icon" style="background:#dcfce7; color:#166534; width:40px; height:40px; font-size:13px; font-weight:700;">PDF</div>
         <div style="flex:1;">
           <div style="font-size:13px; font-weight:600; color:#1f2937;">report.pdf</div>
           <div style="font-size:11px; color:#6b7280;">2.1 MB · PDF 文档 · 已自动下载</div>
         </div>
-        <span class="email-tag" style="background:#dcfce7; color:#166534; padding:3px 10px;">✓ 已下载</span>
+        <span class="email-tag" style="background:#dcfce7; color:#166534; padding:3px 10px;">已下载</span>
         <button class="attach-download-btn">打开</button>
         <button class="attach-download-btn">在文件夹中显示</button>
       </div>
@@ -4742,12 +4756,12 @@ steps:
     <!-- 附件2: 中等文件 - 手动下载 -->
     <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="channel-icon" style="background:#fef3c7; color:#92400e; width:40px; height:40px; font-size:20px;">📊</div>
+        <div class="channel-icon" style="background:#fef3c7; color:#92400e; width:40px; height:40px; font-size:13px; font-weight:700;">XLS</div>
         <div style="flex:1;">
           <div style="font-size:13px; font-weight:600; color:#1f2937;">budget_q3.xlsx</div>
           <div style="font-size:11px; color:#6b7280;">8.0 MB · Excel 表格 · 需手动下载</div>
         </div>
-        <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:3px 10px;">⏳ 待下载</span>
+        <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:3px 10px;">待下载</span>
         <button class="attach-download-btn primary">下载</button>
       </div>
     </div>
@@ -4755,28 +4769,28 @@ steps:
     <!-- 附件3: 大文件 - 警告确认 -->
     <div style="border:1px solid #fde68a; background:#fffbeb; border-radius:8px; padding:14px 16px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="channel-icon" style="background:#fef3c7; color:#92400e; width:40px; height:40px; font-size:20px;">🎬</div>
+        <div class="channel-icon" style="background:#fef3c7; color:#92400e; width:40px; height:40px; font-size:13px; font-weight:700;">MP4</div>
         <div style="flex:1;">
           <div style="font-size:13px; font-weight:600; color:#1f2937;">meeting_recording.mp4</div>
-          <div style="font-size:11px; color:#92400e;">⚠️ 78.5 MB · 视频文件 · 大文件需确认下载</div>
+          <div style="font-size:11px; color:#92400e;">78.5 MB · 视频文件 · 大文件需确认下载</div>
         </div>
-        <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:3px 10px;">⚠️ 需确认</span>
+        <span class="email-tag" style="background:#fef3c7; color:#92400e; padding:3px 10px;">需确认</span>
         <button class="attach-download-btn primary">确认下载</button>
       </div>
       <div style="margin-top:10px; padding:8px 12px; background:white; border-radius:6px; font-size:11px; color:#6b7280;">
-        💡 提示: 此附件较大 (78.5 MB)，下载可能需要 1-2 分钟，建议在 Wi-Fi 环境下载
+        提示: 此附件较大 (78.5 MB)，下载可能需要 1-2 分钟，建议在 Wi-Fi 环境下载
       </div>
     </div>
 
     <!-- 附件4: 超大文件 - 拒绝下载 -->
     <div style="border:1px solid #fecaca; background:#fef2f2; border-radius:8px; padding:14px 16px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="channel-icon" style="background:#fee2e2; color:#991b1b; width:40px; height:40px; font-size:20px;">📦</div>
+        <div class="channel-icon" style="background:#fee2e2; color:#991b1b; width:40px; height:40px; font-size:13px; font-weight:700;">ZIP</div>
         <div style="flex:1;">
           <div style="font-size:13px; font-weight:600; color:#991b1b;">dataset_full.zip</div>
-          <div style="font-size:11px; color:#dc2626;">🚫 256 MB · 压缩包 · 超过 200MB 限制，已拒绝下载</div>
+          <div style="font-size:11px; color:#dc2626;">256 MB · 压缩包 · 超过 200MB 限制，已拒绝下载</div>
         </div>
-        <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:3px 10px;">🚫 已拒绝</span>
+        <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:3px 10px;">已拒绝</span>
         <button class="attach-download-btn">复制元信息</button>
       </div>
     </div>
@@ -4784,16 +4798,16 @@ steps:
     <!-- 附件5: 危险类型 - 拦截 -->
     <div style="border:1px solid #fecaca; background:#fef2f2; border-radius:8px; padding:14px 16px; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="channel-icon" style="background:#fee2e2; color:#991b1b; width:40px; height:40px; font-size:20px;">⚠️</div>
+        <div class="channel-icon" style="background:#fee2e2; color:#991b1b; width:40px; height:40px; font-size:13px; font-weight:700;">EXE</div>
         <div style="flex:1;">
           <div style="font-size:13px; font-weight:600; color:#991b1b;">setup.exe</div>
-          <div style="font-size:11px; color:#dc2626;">🛡️ 4.2 MB · 可执行文件 · 危险类型已拦截</div>
+          <div style="font-size:11px; color:#dc2626;">4.2 MB · 可执行文件 · 危险类型已拦截</div>
         </div>
-        <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:3px 10px;">🛡️ 已拦截</span>
+        <span class="email-tag" style="background:#fee2e2; color:#991b1b; padding:3px 10px;">已拦截</span>
         <button class="attach-download-btn danger">强制下载 (不推荐)</button>
       </div>
       <div style="margin-top:10px; padding:8px 12px; background:white; border-radius:6px; font-size:11px; color:#dc2626;">
-        ⚠️ 警告: .exe 文件可能包含恶意代码，已根据 blocked_extensions 配置自动拦截。如确需下载，请确认来源可信。
+        警告: .exe 文件可能包含恶意代码，已根据 blocked_extensions 配置自动拦截。如确需下载，请确认来源可信。
       </div>
     </div>
 
