@@ -571,9 +571,16 @@ class AIClassifier:
                  cache_mgr: ClassifyCacheManager,
                  feedback_mgr: FeedbackManager,
                  confidence_threshold_auto: float = 0.7,  # >= 自动确认
-                 confidence_threshold_manual: float = 0.5) # < 人工队列
+                 confidence_threshold_manual: float = 0.5, # < 人工队列
+                 classify_mode: str = "hybrid",            # 分类模式
+                 llm_enabled: bool = True,                 # LLM 全局开关
+                 daily_llm_quota: int = 0,                 # 每日 LLM 调用上限，0=不限
+                 category_llm_overrides: dict | None = None) # 按分类控制 LLM 介入
 
-    def classify(mail: MailData) -> ClassifyResult:
+    def classify(mail: MailData,
+                 force_ai: bool = False,        # 手动触发时强制走 AI
+                 force_rerun: bool = False      # 忽略缓存重新分类
+    ) -> ClassifyResult:
         """
         返回:
         {
@@ -582,25 +589,84 @@ class AIClassifier:
           "need_reply": bool,
           "confidence": float,
           "reason": str,
-          "source": str,           # "rule" / "llm" / "cache"
+          "source": str,           # "rule" / "llm" / "cache" / "manual"
           "auto_confirm": bool,    # 是否自动确认（>= threshold）
           "tags": list[str]        # 规则自动打标签
         }
         """
 ```
+
+**分类模式（classify_mode）说明：**
+
+| 模式 | 说明 | LLM 是否介入 |
+|------|------|-------------|
+| `"hybrid"` | 混合模式（默认）：规则优先，未命中或 override_ai=false 时走 LLM | 视规则结果决定 |
+| `"rule_only"` | 仅规则模式：完全不调用 LLM，规则未命中 → 标记"未分类"进入人工队列 | 否 |
+| `"ai_only"` | 仅 AI 模式：跳过规则预筛，直接走 LLM（规则仅用于打标签，不决定分类） | 是，必走 |
+| `"manual"` | 手动模式：不自动分类，新邮件标记 status="pending_manual" 等待用户手动触发 | 否，需手动触发 |
+
+**按分类 LLM 控制（category_llm_overrides）：**
+```python
+# config/ai.json 中配置
+"category_llm_overrides": {
+    "告警类": {"use_llm": false},      # 告警类仅用规则，不走 LLM
+    "审批类": {"use_llm": true},       # 审批类必须走 LLM（即使规则命中也不 override）
+    "营销类": {"use_llm": false}       # 营销类仅用规则，节省 API 成本
+}
+```
+- 优先级：`category_llm_overrides` > 规则 `override_ai` > `classify_mode` 全局设定
+- 例如：classify_mode="hybrid" + 告警类 override use_llm=false → 告警邮件永远不走 LLM
+
+**LLM 调用配额控制：**
+```python
+# 每日 LLM 调用计数（SQLite tasks 表或单独计数器）
+def _check_quota() -> bool:
+    """检查今日 LLM 调用是否超限"""
+    if self.daily_llm_quota == 0:
+        return True  # 不限
+    today_count = self._get_today_llm_count()
+    return today_count < self.daily_llm_quota
+
+# 配额耗尽时：
+# → 降级为规则分类
+# → GUI 状态栏显示 "今日 AI 配额已用完 (50/50)"
+# → 日志 WARNING 级别
+```
+
 **分类流程图（代码逻辑）：**
 ```
-1. 查 cache → 命中 → 返回 (source="cache")
-2. 跑 RuleEngine.match() → 命中 → 判断 override_ai
-   ├─ True:  直接用规则结果，confidence 规则给 +0.1 加权 → 返回 (source="rule")
-   └─ False: 规则结果记为 suggestion，继续走 AI
-3. 调用 LLM (system_prompt + user_prompt) → parse_response
-   └─ 失败/超时 → 如果有规则 suggestion → 用规则，confidence 降 0.1
-                  否则 → 返回 {category: "协作类", confidence: 0.0, auto_confirm: false}（进入人工）
+0. 检查 classify_mode
+   ├─ "manual" → 直接返回 {category: null, source: "manual", auto_confirm: false}
+   │              邮件进入 pending_manual 队列，等用户手动触发
+   ├─ "rule_only" → 跳到步骤 2，但步骤 3（LLM）永不执行
+   └─ "ai_only" → 跳过步骤 2 的分类判断，直接到步骤 3（规则仅打标签）
+
+1. 查 cache (force_rerun=False 时) → 命中 → 返回 (source="cache")
+
+2. 跑 RuleEngine.match() → 命中
+   ├─ 检查 category_llm_overrides[命中分类].use_llm
+   │   ├─ false → 直接用规则结果，跳过 LLM → 返回 (source="rule")
+   │   └─ true  → 继续走 LLM（即使 override_ai=true 也走）
+   └─ 无 override 配置 → 判断 override_ai
+       ├─ True 且 classify_mode != "ai_only" → 直接用规则 → 返回 (source="rule")
+       └─ False → 规则结果记为 suggestion，继续走 AI
+
+3. 检查 llm_enabled 和 _check_quota()
+   ├─ llm_enabled=False 或配额耗尽 → 降级：有规则 suggestion 用规则(confidence-0.1)
+   │                                 无规则 → 返回 {category: null, confidence: 0.0}（人工）
+   └─ 通过 → 调用 LLM (system_prompt + user_prompt) → parse_response
+       └─ 失败/超时 → 有规则 suggestion → 用规则，confidence 降 0.1
+                      否则 → 返回 {category: null, confidence: 0.0, auto_confirm: false}（人工）
+
 4. 如果有规则 suggestion 但 AI 不同 → confidence 取 min(ai_confidence, 0.85)（降低）
+
 5. 判断 auto_confirm = confidence >= confidence_threshold_auto
-6. 写 cache
-7. 返回结果
+
+6. 写 cache（仅 source="llm" 时写）
+
+7. _increment_today_llm_count()（仅实际调用了 LLM 时）
+
+8. 返回结果
 ```
 
 #### A4.7 与邮件拉取集成
@@ -608,19 +674,27 @@ class AIClassifier:
 1. 拉取到新邮件 → `MailStore.save()` → 保存后立即调用 `AIClassifier.classify(mail)`
 2. 分类结果调用 `MailRepository.update_category()` 写入 mails 表
 3. 如果 `auto_confirm=True` → 自动触发 `WorkflowEngine.match_and_run(mail)`（见任务A5）
-4. 如果 `auto_confirm=False` → 标记邮件 status = `"pending_manual"`，GUI 中邮件列表行高亮黄色边框
+4. 如果 `auto_confirm=False` 或 `classify_mode="manual"` → 标记邮件 status = `"pending_manual"`，GUI 中邮件列表行高亮黄色边框
 5. 所有 AI 操作运行在独立 `AIClassifyWorker(QThread)` 中，绝不阻塞拉取线程
+6. **手动触发分类**：GUI 中邮件详情页"🔄 重新分类"按钮 → 调用 `classify(mail, force_ai=True, force_rerun=True)`（强制走 AI，忽略缓存和模式限制）
 
 **验收标准：**
 - [ ] 规则命中 + override_ai=True → 不调用 LLM，source="rule"
+- [ ] classify_mode="rule_only" → 任何邮件都不调用 LLM，规则未命中的进入人工队列
+- [ ] classify_mode="ai_only" → 跳过规则分类，直接走 LLM（规则仅打标签）
+- [ ] classify_mode="manual" → 新邮件不自动分类，全部进入 pending_manual 队列
+- [ ] llm_enabled=False → 不调用 LLM，降级为规则/人工
+- [ ] category_llm_overrides["告警类"].use_llm=false → 告警邮件即使规则 override_ai=false 也不走 LLM
+- [ ] daily_llm_quota=50 且今日已调用 50 次 → 第 51 次降级为规则分类，状态栏显示配额耗尽
 - [ ] 构造测试邮件（含审批关键词）→ AI 返回 category="审批类"，confidence>0.7
 - [ ] 构造监控告警邮件（含 [ALERT]）→ 规则直接命中，source="rule"
 - [ ] LLM 调用超时时 → 自动降级规则/默认，程序不崩溃
 - [ ] 相同邮件第二次分类 → 从缓存返回，耗时 < 10ms
-- [ ] 分类结果写入 mails 表 category/priority/confidence 字段正确
+- [ ] "重新分类"按钮 → force_ai=True + force_rerun=True，强制走 AI 且忽略缓存
+- [ ] 分类结果写入 mails 表 category/priority/confidence/source 字段正确
 - [ ] GUI 邮件列表显示分类标签（📋审批/⚠️告警/📰资讯...）
 - [ ] 置信度 <0.5 的邮件 → 列表行黄色边框标记 "待人工确认"
-- [ ] 单元测试：test_ai_classifier.py 覆盖规则命中、LLM 成功/失败/降级、缓存命中、置信度阈值判断
+- [ ] 单元测试：test_ai_classifier.py 覆盖四种模式、LLM 开关、配额控制、按分类 override、规则命中、LLM 成功/失败/降级、缓存命中、手动强制重分类
 
 ---
 
@@ -1018,10 +1092,13 @@ class TaskRecovery:
   ```
   ┌─ AI 智能分类 ──────────────────────────────────────────┐
   │ 分类: 📋 审批类    优先级: 普通    需回复: ✅ 是       │
-  │ 置信度: 0.92 (自动确认)                                │
+  │ 置信度: 0.92 (自动确认)    来源: AI                    │
   │ 理由: 包含审批关键词和附件                              │
   │                                                         │
-  │ [📝 修正分类]  [🔄 重新分类]                            │
+  │ [📝 修正分类]  [🔄 重新分类 ▾]                          │
+  │                  ├ 重新分类（按当前模式）               │
+  │                  ├ 强制 AI 分类（忽略模式和缓存）       │
+  │                  └ 强制规则分类（不走 LLM）             │
   ├─ AI 摘要 ──────────────────────────────────────────────┤
   │ 这是 Q3 部门预算审批邮件，申请金额 125,000 元...       │
   │ [生成摘要]（如果还没生成则显示按钮，已生成显示文本）    │
@@ -1030,6 +1107,11 @@ class TaskRecovery:
   │ ❌ alert_handler v1.0 (跳过-不满足触发)                  │
   └─────────────────────────────────────────────────────────┘
   ```
+- **"重新分类"按钮三种行为（下拉菜单）：**
+  - **重新分类（按当前模式）**：`classify(mail, force_rerun=True)` — 忽略缓存，按当前 classify_mode 重跑
+  - **强制 AI 分类**：`classify(mail, force_ai=True, force_rerun=True)` — 无论 classify_mode/llm_enabled/配额如何，强制走 LLM
+  - **强制规则分类**：临时以 rule_only 模式运行一次 — 不走 LLM，仅用规则
+- **分类来源标识**：AISummaryCard 显示 `来源: AI` / `来源: 规则` / `来源: 缓存` / `来源: 人工`，让用户清楚分类是如何产生的
 - **流程执行详情按钮** → 弹出对话框显示步骤列表：step1 ✅ extract_info → step2 ✅ check_duplicate → step3 ➡️ 金额分支(>10万) → step4_high ✅ notify...
 - **操作按钮功能实现**（当前 MVP 中 4 个按钮无 on_click 事件，需全部接入）：
   - [回复] → 打开写邮件对话框（见任务 A10），预填收件人 = 原发件人，主题 = "Re: " + 原主题，正文引用原邮件
@@ -1079,30 +1161,85 @@ class TaskRecovery:
 
 #### A8.5 AI 设置页面（ai_config_page.py）
 ```
-LLM 后端:
-  Provider: [DeepSeek ▾]    OpenAI / DeepSeek / Ollama
-  API Key: [••••••••••] [显示] [测试连接]
-  Base URL: [https://api.deepseek.com]
-  Model: [deepseek-chat]
-  Temperature: [0.1]
-  超时 (秒): [30]
+─── 分类模式 ────────────────────────────────────
+分类模式: [混合模式（规则优先） ▾]
+  ├ 混合模式（规则优先）  — 规则命中且 override_ai 时跳过 LLM，其余走 AI
+  ├ 仅规则模式            — 完全不调用 LLM，规则未命中的进人工队列
+  ├ 仅 AI 模式            — 跳过规则预筛，直接走 LLM（规则仅打标签）
+  └ 手动模式              — 不自动分类，新邮件等用户手动触发
 
-置信度阈值:
+[x] 启用 LLM 分类         ← 全局开关，关闭后等同"仅规则模式"
+    今日已用: 12 / [50] 次  ← 配额显示（0=不限）
+
+─── LLM 后端 ────────────────────────────────────
+Provider: [DeepSeek ▾]    OpenAI / DeepSeek / Ollama
+API Key: [••••••••••] [显示] [测试连接]
+Base URL: [https://api.deepseek.com]
+Model: [deepseek-chat]
+Temperature: [0.1]
+超时 (秒): [30]
+
+─── LLM 调用配额 ────────────────────────────────
+[ ] 启用每日配额限制    每日上限: [50] 次
+    配额耗尽时: [降级为规则分类 ▾]  / 降级为规则分类 / 进入人工队列
+
+─── 按分类控制 LLM 介入 ─────────────────────────
+  分类         使用 LLM
+  审批类       [☑] 是    ← 即使规则命中也走 AI 二次确认
+  告警类       [☐] 否    ← 仅用规则，不走 LLM
+  通知类       [☑] 是
+  会议类       [☑] 是
+  协作类       [☑] 是
+  资讯类       [☐] 否    ← 节省 API 成本
+  营销类       [☐] 否
+  垃圾类       [☐] 否
+
+─── 置信度阈值 ──────────────────────────────────
   自动确认阈值: [0.7 ━━━━●━━━━━ 0.9] 滑块
   人工确认阈值: [0.5 ━━━●━━━━━━ 0.7] 滑块
 
-分类缓存:
+─── 分类缓存 ────────────────────────────────────
   [x] 启用分类缓存    缓存有效期: [24] 小时
 
-规则引擎:
+─── 规则引擎 ────────────────────────────────────
   [x] 启用规则预筛    规则文件: ./rules/custom_rules.yaml [编辑] [重载]
 
-反馈学习:
+─── 反馈学习 ────────────────────────────────────
   [x] 自动更新规则引擎    反馈数据目录: ./data/feedback/
 
 [保存] [重置默认]
 ```
 保存后写入 `config/ai.json`，密码走 `SecretManager.set_secret("api_keys."+provider, key)`。
+
+**ai.json 完整配置结构：**
+```json
+{
+  "classify_mode": "hybrid",
+  "llm_enabled": true,
+  "daily_llm_quota": 50,
+  "quota_exhausted_action": "fallback_rule",
+  "category_llm_overrides": {
+    "审批类": {"use_llm": true},
+    "告警类": {"use_llm": false},
+    "资讯类": {"use_llm": false},
+    "营销类": {"use_llm": false},
+    "垃圾类": {"use_llm": false}
+  },
+  "provider": "deepseek",
+  "api_key_ref": "secrets.api_keys.deepseek",
+  "base_url": "https://api.deepseek.com",
+  "model": "deepseek-chat",
+  "temperature": 0.1,
+  "max_tokens": 500,
+  "timeout": 30,
+  "confidence_threshold_auto": 0.7,
+  "confidence_threshold_manual": 0.5,
+  "cache_enabled": true,
+  "cache_ttl_hours": 24,
+  "rule_engine_enabled": true,
+  "feedback_auto_update_rules": true
+}
+```
 
 #### A8.6 流程管理页面（workflow_page.py）
 左侧：流程列表 + 启停开关：
@@ -1168,6 +1305,12 @@ LLM 后端:
 - [ ] HTML 邮件正文渲染正确，不显示原始 HTML 标签
 - [ ] 已发送视图 → 显示已发送邮件列表
 - [ ] AI 设置切换 Provider → 保存后 ai.json 字段正确，密码走 secrets.enc
+- [ ] AI 设置页切换分类模式 → 保存后立即生效，新邮件按新模式分类
+- [ ] AI 设置页关闭 LLM 开关 → 新邮件不再调用 LLM，降级规则/人工
+- [ ] AI 设置页按分类控制：取消"告警类"使用 LLM → 告警邮件不走 LLM
+- [ ] AI 设置页配额设为 50，今日已用 50 → 状态栏显示"AI 配额已用完"
+- [ ] 邮件详情"重新分类"下拉菜单 → 三种模式可选，结果正确更新
+- [ ] 邮件详情 AISummaryCard 显示分类来源（AI/规则/缓存/人工）
 - [ ] 流程管理页 YAML 语法检查：${未定义变量引用} / 未定义 action 名称 → 红色错误提示
 - [ ] 模板渲染预览：选择测试邮件 → 显示渲染后的最终 markdown 纯文本预览
 - [ ] 统计面板数字与实际数据库查询一致
